@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useParams } from 'react-router-dom'
-import { CheckCircle2, CloudOff, FileText, Languages, LayoutDashboard, Loader2, AlertCircle, FolderKanban } from 'lucide-react'
+import { CheckCircle2, CloudOff, Download, FileText, Languages, LayoutDashboard, Loader2, AlertCircle, FolderKanban, RefreshCw } from 'lucide-react'
+import { exportProjects } from '../lib/files'
 import { registerSW } from 'virtual:pwa-register'
 import { translate, usePrefs, useT } from '../i18n'
 import { useProject, useProjects } from '../store/projects'
@@ -14,13 +15,65 @@ function SaveIndicator() {
   const map = {
     saving: { icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, text: t('save.saving'), cls: 'text-navy-100' },
     saved: { icon: <CheckCircle2 className="h-3.5 w-3.5" />, text: t('save.saved'), cls: 'text-teal-400' },
-    error: { icon: <AlertCircle className="h-3.5 w-3.5" />, text: t('save.error'), cls: 'text-red-300' },
+    retrying: { icon: <RefreshCw className="h-3.5 w-3.5" />, text: t('save.retrying'), cls: 'text-gold-400' },
+    failed: { icon: <AlertCircle className="h-3.5 w-3.5" />, text: t('save.failed'), cls: 'text-red-300' },
   }[state]
   return (
-    <span className={`hidden items-center gap-1.5 text-xs md:inline-flex ${map.cls}`} data-testid="save-state" data-state={state} aria-live="polite">
+    <span className={`inline-flex items-center gap-1.5 text-xs ${map.cls}`} data-testid="save-state" data-state={state} aria-live="polite">
       {map.icon}
-      {map.text}
+      <span className={state === 'saving' || state === 'saved' ? 'hidden md:inline' : ''}>{map.text}</span>
     </span>
+  )
+}
+
+/** Shown whenever changes could not be written to storage. Nothing is lost while the tab stays open. */
+function SaveProblemBanner() {
+  const { t, lang } = useT()
+  const save = useProjects((s) => s.save)
+  const retry = useProjects((s) => s.retrySave)
+  const projects = useProjects((s) => s.projects)
+  const [busy, setBusy] = useState(false)
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (save.status !== 'retrying') return
+    const h = setInterval(() => tick((n) => n + 1), 1000)
+    return () => clearInterval(h)
+  }, [save.status])
+  if (save.status !== 'retrying' && save.status !== 'failed') return null
+  const secs = save.nextRetryAt ? Math.max(0, Math.ceil((save.nextRetryAt - Date.now()) / 1000)) : null
+  return (
+    <div role="alert" className="no-print border-b border-red-200 bg-red-50 text-red-900" data-testid="save-banner" data-state={save.status}>
+      <div className="mx-auto flex max-w-[1440px] flex-col gap-2 px-4 py-2.5 text-sm sm:flex-row sm:items-center sm:px-6">
+        <AlertCircle className="hidden h-5 w-5 shrink-0 sm:block" />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">{t('save.bannerTitle', { n: save.unsaved })}</p>
+          <p className="text-xs">
+            {save.status === 'retrying' && secs !== null ? t('save.bannerRetrying', { s: secs }) : t('save.bannerFailed')} {t('save.bannerKeep')}
+            {save.lastError && <span className="ms-1 opacity-70" dir="ltr" lang="en">({save.lastError})</span>}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button
+            className="btn-danger py-1.5"
+            disabled={busy}
+            data-testid="retry-save"
+            onClick={async () => {
+              setBusy(true)
+              const r = await retry()
+              setBusy(false)
+              toast(r.ok ? translate(lang, 'save.saved') : translate(lang, 'save.stillFailing'), r.ok ? 'info' : 'error')
+            }}
+          >
+            <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
+            {t('save.retryNow')}
+          </button>
+          <button className="btn-secondary py-1.5" onClick={() => exportProjects(Object.values(projects), 'problemsolving-lab-unsaved-backup')} data-testid="banner-export">
+            <Download className="h-4 w-4" />
+            {t('save.exportNow')}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -37,6 +90,17 @@ function useOnline() {
     }
   }, [])
   return online
+}
+
+function LoadErrorNotice() {
+  const err = useProjects((s) => s.loadError)
+  const { t } = useT()
+  if (!err) return null
+  return (
+    <div role="alert" className="no-print border-b border-red-200 bg-red-50 px-4 py-2.5 text-center text-sm text-red-900" data-testid="load-error">
+      {t('save.loadError')}
+    </div>
+  )
 }
 
 let swRegistered = false
@@ -120,6 +184,8 @@ export function Layout({ loaded }: { loaded: boolean }) {
         </div>
         {!online && <div className="bg-gold-500/90 px-4 py-1 text-center text-xs text-navy-950">{t('app.offline')}</div>}
       </header>
+      <SaveProblemBanner />
+      <LoadErrorNotice />
       <main id="main" className="flex-1">
         {loaded ? (
           <Outlet />

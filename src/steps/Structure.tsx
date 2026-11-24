@@ -5,13 +5,21 @@ import { addChild, addSiblingAfter, childrenOf, descendantIds, flatten, indent, 
 import { deleteIssue } from '../lib/integrity'
 import { rootQuestion } from '../lib/progress'
 import { downloadBlob, downloadText, slug } from '../lib/files'
-import { MECE_KEYS, type MeceAnswer, type MeceQuestionKey, type MeceStatus, type Project, type TreeType } from '../lib/types'
+import { MECE_KEYS, NODE_KINDS, type NodeKind, type MeceAnswer, type MeceQuestionKey, type MeceStatus, type Project, type TreeType } from '../lib/types'
 import type { StepProps } from '../pages/StepPage'
+import { structureHints } from '../lib/structureChecks'
 import { IssueTreeSvg, svgToPngBlob, svgToString } from '../components/IssueTreeSvg'
 import { confirmDialog, Empty, Notice, Segmented, TextField, toast } from '../components/ui'
 
 /** The MECE-consistent answer for each review question. */
-export const MECE_GOOD: Record<MeceQuestionKey, MeceAnswer> = { overlap: 'no', missing: 'no', logic: 'yes', contributes: 'yes' }
+export const MECE_GOOD: Record<MeceQuestionKey, MeceAnswer> = { contributes: 'yes', overlap: 'no', missing: 'no', logic: 'yes', causes: 'yes', treeType: 'yes' }
+
+const KIND_STYLE: Record<NodeKind, string> = {
+  '': 'border-navy-100 bg-white text-navy-700/70',
+  driver: 'border-teal-100 bg-teal-50 text-teal-700',
+  symptom: 'border-amber-200 bg-amber-50 text-amber-900',
+  consequence: 'border-purple-100 bg-purple-50 text-purple-800',
+}
 
 export function meceAcceptable(p: Project): boolean {
   const s = p.structure
@@ -84,6 +92,20 @@ function OutlineEditor({ project, update }: StepProps) {
                       }
                     }}
                   />
+                  <select
+                    className={`hidden w-auto shrink-0 rounded-md border px-1.5 py-1 text-xs sm:block ${KIND_STYLE[node.kind]}`}
+                    value={node.kind}
+                    onChange={(e) => update((p) => void p.structure.nodes.forEach((n) => n.id === node.id && (n.kind = e.target.value as NodeKind)))}
+                    aria-label={`${t('kind.label')} ${label}`}
+                    title={t('kind.label')}
+                    data-testid="node-kind"
+                  >
+                    {NODE_KINDS.map((k) => (
+                      <option key={k} value={k}>
+                        {t(`kind.${k}`)}
+                      </option>
+                    ))}
+                  </select>
                   <div className="flex shrink-0 items-center opacity-100 sm:opacity-60 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
                     <button
                       className="btn-icon h-7 w-7"
@@ -161,6 +183,8 @@ function MeceReview({ project, update }: StepProps) {
   const { t, lang } = useT()
   const s = project.structure
   const acceptable = meceAcceptable(project)
+  const hints = structureHints(project)
+  const newQuestionsPending = s.meceStatus === 'accepted' && (s.mece.causes.answer === 'unanswered' || s.mece.treeType.answer === 'unanswered')
   const sig = treeSignature(rootQuestion(project), s.nodes)
   const changed = s.meceStatus === 'accepted' && s.meceSignature !== sig
 
@@ -179,16 +203,36 @@ function MeceReview({ project, update }: StepProps) {
   return (
     <section className="card card-pad" data-testid="mece">
       <h2 className="section-title mb-1">{t('mece.title')}</h2>
-      <p className="mb-4 text-sm text-navy-700">{t('mece.intro')}</p>
+      <p className="mb-1 text-sm text-navy-700">{t('mece.intro')}</p>
+      <p className="mb-4 text-xs text-navy-700/80">{t('mece.hintsNote')}</p>
+      {newQuestionsPending && (
+        <div className="mb-4">
+          <Notice testId="mece-new-questions">{t('mece.newQuestions')}</Notice>
+        </div>
+      )}
       <div className="space-y-4">
         {MECE_KEYS.map((k, i) => {
           const a = s.mece[k]
           const bad = a.answer !== 'unanswered' && a.answer !== MECE_GOOD[k]
           return (
             <div key={k} className={`rounded-lg border p-3 ${bad ? 'border-amber-200 bg-amber-50/50' : 'border-navy-100'}`} data-testid={`mece-${k}`}>
-              <p className="mb-2 text-sm font-medium text-navy-900">
-                {i + 1}. {t(`mece.q.${k}`)}
+              <p className="mb-0.5 text-xs font-semibold text-teal-700">
+                {i + 1}. {t(`mece.tag.${k}`)}
               </p>
+              <p className="mb-1 text-sm font-medium text-navy-900">{t(`mece.q.${k}`)}</p>
+              <p className="mb-2 text-xs text-navy-700">{t(`mece.help.${k}`)}</p>
+              {hints.filter((h) => h.check === k).length > 0 && (
+                <div className="mb-2 rounded-md bg-navy-50 p-2" data-testid={`hints-${k}`}>
+                  <p className="text-[11px] font-semibold text-navy-700">{t('mece.hints')}</p>
+                  <ul className="mt-0.5 list-disc space-y-0.5 ps-4 text-xs text-navy-800">
+                    {hints
+                      .filter((h) => h.check === k)
+                      .map((h, j) => (
+                        <li key={j}>{t(`hint.${h.code}` as never, h.vars)}</li>
+                      ))}
+                  </ul>
+                </div>
+              )}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Segmented<MeceAnswer>
                   label={t(`mece.q.${k}`)}

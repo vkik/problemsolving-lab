@@ -76,17 +76,19 @@ export function buildSampleProject(): Project {
   const b4 = add(null, 'Pumping test procedure and measurement')
   const i41 = add(b4, 'Was the pumping test carried out and recorded to the specification?')
   const i42 = add(b4, 'Was the flow and water-level measuring equipment accurate?')
-  p.structure.nodes = nodes
+  p.structure.nodes = nodes.map((n) => ({ ...n, kind: 'driver' as const }))
   p.structure.treeType = 'issue'
   p.structure.mece = {
     overlap: { answer: 'no', note: 'Natural conditions, design, construction and testing are separate stages of the well’s life.' },
     missing: { answer: 'no', note: 'Checked with the hydrogeologist: every possible cause falls in one of the four branches.' },
     logic: { answer: 'yes', note: 'Level 1 follows the life cycle of the well; level 2 asks one question per factor.' },
     contributes: { answer: 'yes', note: 'Each branch could explain the shortfall.' },
+    causes: { answer: 'yes', note: 'All branches are possible causes. The low yield itself (the symptom) is in the problem statement; unmet demand (a consequence) is under “why it matters”.' },
+    treeType: { answer: 'yes', note: 'An issue tree: the sub-issues are written as questions to investigate.' },
   }
   p.structure.meceStatus = 'accepted'
   p.structure.meceReviewedAt = new Date().toISOString()
-  p.structure.meceSignature = treeSignature(d.question, nodes)
+  p.structure.meceSignature = treeSignature(d.question, p.structure.nodes)
   p.structure.hypothesis = {
     initial: 'The shortfall may originate in the well itself (construction, development or testing) rather than in the aquifer — a hypothesis to be tested, not assumed.',
     rationale: 'Illustrative: the survey described a water-bearing formation at this site, and the records raise questions about development and test procedure.',

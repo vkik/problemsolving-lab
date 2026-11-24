@@ -3,12 +3,19 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Circle, Eye, Lightbulb, PanelRightClose, PanelRightOpen, Sparkles } from 'lucide-react'
 import { usePrefs, useT } from '../i18n'
 import { COACHING } from '../content/coaching'
-import { CRITERIA } from '../content/criteria'
-import { stepCriteria } from '../lib/progress'
+import { CHECKS, CRITERIA } from '../content/criteria'
+import { evaluateStep, type StepStatus } from '../lib/progress'
 import { STEP_KEYS, type Project, type StepKey } from '../lib/types'
 import { useProjects } from '../store/projects'
 import { Checkbox } from './ui'
 import { StepNav } from './StepTracker'
+
+const STATUS_BADGE: Record<StepStatus, string> = {
+  complete: 'bg-teal-500 text-white',
+  'complete-limited': 'bg-teal-500 text-white ring-2 ring-gold-400',
+  'needs-evidence': 'bg-amber-500 text-white',
+  incomplete: 'bg-white/10 text-navy-100',
+}
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
@@ -80,7 +87,8 @@ function GuidancePanel({ project, step, compact = false }: { project: Project; s
   const update = useProjects((s) => s.update)
   const c = COACHING[step]
   const ticks = project.checklists[step] ?? {}
-  const criteria = stepCriteria(project, step)
+  const evaluation = evaluateStep(project, step)
+  const criteria = evaluation.criteria
   const met = criteria.filter((x) => x.met).length
   return (
     <div className="space-y-3">
@@ -136,6 +144,25 @@ function GuidancePanel({ project, step, compact = false }: { project: Project; s
           ))}
         </ul>
         <p className="mt-2 text-xs text-navy-700/70">{t('shell.criteriaNote')}</p>
+        <div className="mt-3 border-t border-navy-100 pt-3" data-testid="quality-checks">
+          <p className="mb-1.5 text-sm font-semibold text-navy-900">{t('eval.checks')}</p>
+          {evaluation.issues.length === 0 ? (
+            <p className="text-xs text-navy-700/70">{t('eval.noChecks')}</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {evaluation.issues.map((iss, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs" data-level={iss.level}>
+                  <span className={`badge shrink-0 ${iss.level === 'needs-evidence' ? 'bg-amber-100 text-amber-900' : 'bg-gold-100 text-gold-600'}`}>
+                    {iss.level === 'needs-evidence' ? t('eval.needsEvidence') : t('eval.limitation')}
+                  </span>
+                  <span className="text-navy-800" dir="auto">
+                    {(CHECKS[iss.key]?.[lang] ?? iss.key).replace('{item}', iss.key === 'define.smartPartly' ? t(`smart.${iss.item}` as never) : iss.item)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -148,8 +175,9 @@ export function StepShell({ project, step, children, output }: { project: Projec
   const idx = STEP_KEYS.indexOf(step)
   const prev = STEP_KEYS[idx - 1]
   const next = STEP_KEYS[idx + 1]
-  const criteria = stepCriteria(project, step)
-  const complete = criteria.every((c) => c.met)
+  const evaluation = evaluateStep(project, step)
+  const criteria = evaluation.criteria
+  const status = evaluation.status
   const wide = useMediaQuery('(min-width: 1280px)')
 
   return (
@@ -179,8 +207,8 @@ export function StepShell({ project, step, children, output }: { project: Projec
                 <p className="mt-2 max-w-2xl text-sm text-navy-100">{COACHING[step].purpose[lang]}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <span className={`badge ${complete ? 'bg-teal-500 text-white' : 'bg-white/10 text-navy-100'}`} data-testid="step-status">
-                  {complete ? t('shell.stepComplete') : t('shell.stepIncomplete', { n: criteria.filter((c) => c.met).length, total: criteria.length })}
+                <span className={`badge ${STATUS_BADGE[status]}`} data-testid="step-status" data-status={status} title={t(`eval.d.${status}`)}>
+                  {status === 'incomplete' ? t('shell.stepIncomplete', { n: criteria.filter((c) => c.met).length, total: criteria.length }) : t(`eval.${status}`)}
                 </span>
                 <button className="btn border border-white/20 py-1.5 text-white hover:bg-white/10" onClick={() => setOpen(!open)} aria-expanded={open} data-testid="toggle-guidance">
                   {open ? <PanelRightClose className="h-4 w-4 rtl:rotate-180" /> : <PanelRightOpen className="h-4 w-4 rtl:rotate-180" />}

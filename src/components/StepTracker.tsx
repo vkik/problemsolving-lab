@@ -1,12 +1,40 @@
 import { Link } from 'react-router-dom'
-import { Check } from 'lucide-react'
+import { AlertTriangle, Check } from 'lucide-react'
 import { useT } from '../i18n'
-import { stepComplete, stepFraction } from '../lib/progress'
+import { evaluateStep, stepFraction } from '../lib/progress'
 import { STEP_KEYS, type Project, type StepKey } from '../lib/types'
 
-export function stepState(p: Project, s: StepKey): 'complete' | 'progress' | 'empty' {
-  if (stepComplete(p, s)) return 'complete'
+export type StepVisualState = 'complete' | 'limited' | 'needs-evidence' | 'progress' | 'empty'
+
+export function stepState(p: Project, s: StepKey): StepVisualState {
+  const st = evaluateStep(p, s).status
+  if (st === 'complete') return 'complete'
+  if (st === 'complete-limited') return 'limited'
+  if (st === 'needs-evidence') return 'needs-evidence'
   return stepFraction(p, s) > 0 ? 'progress' : 'empty'
+}
+
+/** Circle styles for a step state (number/icon badge). */
+export const STATE_CIRCLE: Record<StepVisualState, string> = {
+  complete: 'bg-teal-500 text-white',
+  limited: 'bg-teal-500 text-white ring-2 ring-gold-400 ring-offset-1',
+  'needs-evidence': 'bg-amber-500 text-white',
+  progress: 'bg-gold-400 text-navy-950',
+  empty: 'bg-navy-100 text-navy-700',
+}
+
+export const STATE_BAR: Record<StepVisualState, string> = {
+  complete: 'bg-teal-500',
+  limited: 'bg-teal-400',
+  'needs-evidence': 'bg-amber-500',
+  progress: 'bg-gold-400',
+  empty: 'bg-navy-100',
+}
+
+export function StateIcon({ state, n, className = 'h-3.5 w-3.5' }: { state: StepVisualState; n: number; className?: string }) {
+  if (state === 'complete' || state === 'limited') return <Check className={className} />
+  if (state === 'needs-evidence') return <AlertTriangle className={className} />
+  return <>{n}</>
 }
 
 /** Seven small segments — used on dashboard cards. */
@@ -20,7 +48,7 @@ export function MiniTracker({ project }: { project: Project }) {
           <span
             key={s}
             title={`${i + 1}. ${t(`step.${s}`)}`}
-            className={`h-1.5 flex-1 rounded-full ${st === 'complete' ? 'bg-teal-500' : st === 'progress' ? 'bg-gold-400' : 'bg-navy-100'}`}
+            className={`h-1.5 flex-1 rounded-full ${STATE_BAR[st]}`}
           />
         )
       })}
@@ -47,11 +75,10 @@ export function StepNav({ project, active, orientation = 'vertical' }: { project
             }`}
           >
             <span
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                st === 'complete' ? 'bg-teal-500 text-white' : st === 'progress' ? 'bg-gold-400 text-navy-950' : isActive ? 'bg-white/15 text-white' : 'bg-navy-100 text-navy-700'
-              }`}
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${st === 'empty' && isActive ? 'bg-white/15 text-white' : STATE_CIRCLE[st]}`}
+              data-state={st}
             >
-              {st === 'complete' ? <Check className="h-3.5 w-3.5" /> : i + 1}
+              <StateIcon state={st} n={i + 1} />
             </span>
             <span className={`${orientation === 'horizontal' ? 'hidden sm:inline' : ''} leading-snug`}>{t(`step.${s}`)}</span>
           </Link>

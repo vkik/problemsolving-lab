@@ -1,4 +1,7 @@
-name: Test and deploy to GitHub Pages
+name: CI and deploy to GitHub Pages
+
+# Pull requests: lint, type-check, unit tests, production build and Playwright acceptance tests.
+# Pushes to main: the same checks, then deploy to GitHub Pages only if every check passed.
 
 on:
   push:
@@ -8,60 +11,91 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # The site is served from https://<user>.github.io/<repository-name>/
   BASE_PATH: /${{ github.event.repository.name }}/
 
 jobs:
-  test:
+  quality:
+    name: Lint, type-check, unit tests, build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - name: Lint
+        run: npm run lint
+      - name: Type-check
+        run: npm run typecheck
+      - name: Unit tests
+        run: npx vitest run --reporter=default --reporter=junit --outputFile.junit=reports/unit-junit.xml
+      - name: Production build
+        run: npm run build
+      - name: Upload unit test report (on failure)
         if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-report
+          path: reports
+          retention-days: 14
+      - name: Configure Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  e2e:
+    name: Playwright acceptance tests
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Acceptance tests
+        run: npm run test:e2e
+      - name: Upload Playwright report and traces (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
             playwright-report
             test-results
-          retention-days: 7
-
-  build:
-    needs: test
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
+          retention-days: 14
 
   deploy:
-    needs: build
+    name: Deploy to GitHub Pages
+    needs: [quality, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

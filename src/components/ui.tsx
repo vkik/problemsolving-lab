@@ -253,15 +253,18 @@ export function DialogHost() {
     const prev = document.activeElement as HTMLElement | null
     setTimeout(() => (req.input ? textRef.current : confirmRef.current)?.focus(), 10)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close(false)
+      // Escape cancels: resolve the current request directly (no reference to render-time closures).
+      if (e.key === 'Escape') {
+        req.resolve({ ok: false, text: '' })
+        set(null)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('keydown', onKey)
       prev?.focus?.()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [req])
+  }, [req, set])
 
   if (!req) return null
   const close = (ok: boolean) => {

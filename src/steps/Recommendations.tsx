@@ -1,12 +1,13 @@
 import { Plus, Trash2, Link2 } from 'lucide-react'
-import { formatDate, useT } from '../i18n'
+import { formatDate, useT, type TFn } from '../i18n'
 import { newRecommendation } from '../lib/factory'
 import { deleteRecommendation, rankedFindings } from '../lib/integrity'
-import { allEvidence } from '../lib/progress'
 import { DISPOSITIONS, HORIZONS, type Disposition, type Horizon, type Project, type Recommendation } from '../lib/types'
 import type { StepProps } from '../pages/StepPage'
-import { confirmDialog, Empty, LinkPicker, Notice, Segmented, SelectField, TextField } from '../components/ui'
-import { EVIDENCE_STYLE } from './Analyses'
+import { Checkbox, confirmDialog, Empty, LinkPicker, Notice, Segmented, SelectField, TextField } from '../components/ui'
+import { EVIDENCE_STYLE, RESULT_STYLE } from './Analyses'
+import { SupportBadge } from './Synthesis'
+import { recommendationChain } from '../lib/evidence'
 
 const DISP_TONE: Record<Disposition, string> = {
   recommended: 'bg-teal-600 text-white',
@@ -14,27 +15,56 @@ const DISP_TONE: Record<Disposition, string> = {
   rejected: 'bg-red-600 text-white',
 }
 
+const CHAIN_STYLE = {
+  backed: 'bg-teal-600 text-white',
+  limited: 'bg-gold-100 text-gold-600',
+  precautionary: 'bg-purple-50 text-purple-800',
+  unsupported: 'bg-red-600 text-white',
+  na: 'bg-navy-50 text-navy-700',
+}
+
+/** Evidence status of a recommendation. Never shows "evidence-backed" when the chain is broken. */
+export function ChainBadge({ rec, project, t }: { rec: Recommendation; project: Project; t: TFn }) {
+  const c = recommendationChain(project, rec)
+  if (c.level === 'na') return null
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1" data-testid="chain-badge" data-level={c.level}>
+      <span className={`badge ${CHAIN_STYLE[c.level]}`}>{t(`chain.${c.level}`)}</span>
+      {c.reason && <span className="text-[11px] text-navy-700">{t(`chain.r.${c.reason}`)}</span>}
+    </span>
+  )
+}
+
+/** Recommendation → finding → analysis → evidence. */
 export function Traceability({ rec, project }: { rec: Recommendation; project: Project }) {
   const { t } = useT()
-  const findings = project.synthesis.findings.filter((f) => rec.findingIds.includes(f.id))
-  const ev = allEvidence(project)
-  if (findings.length === 0) return <p className="text-xs text-amber-800">{t('rec.traceNone')}</p>
+  const chain = recommendationChain(project, rec)
+  if (chain.findings.length === 0)
+    return <p className="text-xs text-amber-800">{rec.precautionary && rec.precautionaryJustification.trim() ? t('chain.precautionary') : t('rec.traceNone')}</p>
   return (
-    <ul className="space-y-2" data-testid="traceability">
-      {findings.map((f) => (
+    <ul className="space-y-3" data-testid="traceability">
+      {chain.findings.map(({ finding: f, support }) => (
         <li key={f.id} className="text-xs">
           <p className="font-medium text-navy-900" dir="auto">
             → {f.insight || f.discovery || '…'}
           </p>
-          <ul className="mt-1 space-y-0.5 ps-4">
-            {ev
-              .filter((x) => f.evidenceIds.includes(x.evidence.id))
-              .map(({ evidence: e }) => (
-                <li key={e.id} className="flex items-start gap-1.5 text-navy-700">
-                  <span className={`badge shrink-0 py-0 text-[10px] ${EVIDENCE_STYLE[e.type]}`}>{t(`an.et.${e.type}`)}</span>
-                  <span dir="auto">{e.description || '…'}</span>
-                </li>
-              ))}
+          <div className="mt-1 ps-4">
+            <SupportBadge support={support} t={t} />
+          </div>
+          <ul className="mt-1 space-y-1 ps-4">
+            {support.analyses.map((a) => (
+              <li key={a.id} className="flex items-start gap-1.5 text-navy-700">
+                <span className={`badge shrink-0 py-0 text-[10px] ${RESULT_STYLE[a.result]}`}>{t(`an.r.${a.result}`)}</span>
+                <span dir="auto">{a.title || a.hypothesis || '…'}</span>
+              </li>
+            ))}
+            {support.evidence.map(({ evidence: e }) => (
+              <li key={e.id} className="flex items-start gap-1.5 text-navy-700">
+                <span className={`badge shrink-0 py-0 text-[10px] ${EVIDENCE_STYLE[e.type]}`}>{t(`an.et.${e.type}`)}</span>
+                <span dir="auto">{e.description || '…'}</span>
+              </li>
+            ))}
+            {support.level === 'unlinked' && <li className="font-semibold text-red-700">{t('chain.r.brokenChain')}</li>}
           </ul>
         </li>
       ))}
@@ -53,6 +83,7 @@ function RecCard({ r, project, update }: StepProps & { r: Recommendation }) {
     <article className={`card card-pad border-s-4 ${r.disposition === 'recommended' ? 'border-s-teal-500' : r.disposition === 'investigate' ? 'border-s-gold-500' : 'border-s-red-400'}`} data-testid="rec-card">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Segmented<Disposition> label={t('rec.disposition')} value={r.disposition} onChange={(v) => set({ disposition: v })} options={DISPOSITIONS.map((d) => ({ value: d, label: t(`rec.d.${d}`), tone: DISP_TONE[d] }))} size="sm" testId="rec-disposition" />
+        <ChainBadge rec={r} project={project} t={t} />
         <button className="btn-icon ms-auto hover:text-red-700" onClick={onDelete} aria-label={t('common.delete')}>
           <Trash2 className="h-4 w-4" />
         </button>
@@ -60,6 +91,15 @@ function RecCard({ r, project, update }: StepProps & { r: Recommendation }) {
       <div className="grid gap-4 md:grid-cols-2">
         <TextField className="md:col-span-2" label={t('rec.name')} value={r.title} onChange={(v) => set({ title: v })} testId="rec-title" />
         <TextField className="md:col-span-2" label={t('rec.action')} value={r.action} onChange={(v) => set({ action: v })} multiline testId="rec-action" />
+        {r.disposition === 'recommended' && (
+          <div className="rounded-lg border border-purple-100 bg-purple-50/40 p-3 md:col-span-2">
+            <Checkbox checked={r.precautionary} onChange={(v) => set({ precautionary: v })} label={<span className="font-medium">{t('rec.precautionary')}</span>} testId="rec-precautionary" />
+            <p className="mt-1 ps-6 text-xs text-navy-700">{t('rec.precautionaryHelp')}</p>
+            {r.precautionary && (
+              <TextField className="mt-2 ps-6" label={t('rec.precautionaryJustification')} value={r.precautionaryJustification} onChange={(v) => set({ precautionaryJustification: v })} multiline testId="rec-precautionary-why" />
+            )}
+          </div>
+        )}
         {r.disposition === 'rejected' && (
           <TextField className="md:col-span-2" label={t('rec.rejectionReason')} value={r.rejectionReason} onChange={(v) => set({ rejectionReason: v })} multiline testId="rec-rejection" />
         )}
@@ -135,7 +175,7 @@ export function RecommendationsOutput({ project }: { project: Project }) {
             <ul className="space-y-1">
               {items.map((r) => (
                 <li key={r.id} dir="auto">
-                  <span className="font-medium text-navy-900">{r.title || r.action || '…'}</span>
+                  <ChainBadge rec={r} project={project} t={t} /> <span className="font-medium text-navy-900">{r.title || r.action || '…'}</span>
                   <span className="text-navy-700">
                     {' '}
                     — {r.owner || t('common.notSet')}, {r.deadline ? formatDate(r.deadline, lang) : t('common.notSet')}

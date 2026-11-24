@@ -1,54 +1,87 @@
 # Testing report
 
-**Version:** 1.0.0 · **Date:** 24 November 2026 · **Browser:** Google Chrome (headless, via Playwright) against the production build served under `/problemsolving-lab/`.
+**Version:** 1.1.0 · **Date:** 24 November 2026 · **Branch:** `feature/v1.1-quality-enhancements`
+**Browser:** Chromium via Playwright (Google Chrome locally), against the production build served under `/problemsolving-lab/`.
 
-| Suite | Command | Result |
+| Check | Command | Result |
 |-------|---------|--------|
 | Type-check | `npm run typecheck` | ✅ no errors |
-| Unit tests (Vitest) | `npm test` | ✅ 22 / 22 passed |
-| End-to-end acceptance (Playwright) | `npm run test:e2e` | ✅ 12 / 12 passed, no browser console errors |
+| Lint | `npm run lint` (oxlint) | ✅ 0 errors · 22 warnings (React fast-refresh export style, `Date` read during render; none affects behaviour) |
+| Unit tests (Vitest) | `npm test` | ✅ 55 / 55 in 3 files |
+| Production build | `npm run build` | ✅ 19 precached entries (≈ 922 KiB) |
+| Acceptance tests (Playwright) | `npm run test:e2e` | ✅ 26 / 26 in 2 files |
 
-Every end-to-end test also fails if the browser logs any console error or uncaught exception.
+Every end-to-end test also fails if the browser logs a console error or an uncaught exception. CI runs the same checks on every pull request and on `main` (see README → Deployment).
 
-## Acceptance criteria (brief §9)
+## Unit tests
 
-| # | Criterion | How it is verified | Result |
-|---|-----------|--------------------|--------|
-| 1 | Create and save a project | E2E 1–2: create via dashboard modal, fill worksheet fields, wait for the “All changes saved” state | ✅ |
-| 2 | Reload and confirm persistence | E2E 1–2: reload the page and check field values and the dashboard card (title, current stage) | ✅ |
-| 3 | Create and edit an issue tree | E2E 3–4: add branches and sub-issues, Enter for a sibling, Shift+Tab to outdent, delete with confirmation, visual tree node count. Unit: add, move, indent, outdent and remove operations | ✅ |
-| 4 | MECE review workflow | E2E 3–4: “accepted” is disabled until all four answers are MECE-consistent; a non-MECE answer is flagged; after acceptance, changing the tree shows a warning and the step is no longer complete | ✅ |
-| 5 | Prioritize issues | E2E 5–9: impact/feasibility scoring, score = 9, quadrant list, matrix chips, selection with justification, step complete | ✅ |
-| 6 | Create a work plan | E2E 5–9: coverage warning for selected issues, task from issue, owner and dates, **overdue** indicator, timeline, status filter | ✅ |
-| 7 | Record multiple analyses | E2E 5–9: analysis started from a task (hypothesis carried over), a second analysis added, evidence recorded | ✅ |
-| 8 | Link findings to evidence | E2E 5–9: finding linked to evidence; warnings for unlinked or multi-sentence synthesis appear and then clear | ✅ |
-| 9 | Generate recommendations | E2E 5–9: recommendation with owner, deadline, KPI and verification, linked to a finding; traceability shows the finding’s verified evidence | ✅ |
-| 10 | Generate and print the report | E2E 5–9: all 11 sections present and populated; the Print button calls `window.print()`; Chrome renders an A4 PDF of the report | ✅ |
-| 11 | Export and import a JSON backup | E2E 11: download backup → delete project → import → restored; re-import creates a copy; malformed file rejected with a message. Unit: lossless round-trip of the sample, sanitising of bad input | ✅ |
-| 12 | Switch Arabic / English | E2E 12–13: interface switches, user text unchanged, preference persists after reload; report language set independently | ✅ |
-| 13 | RTL layout | E2E 12–13: `<html dir="rtl" lang="ar">`, step navigation on the right, Arabic text rendered in the tree, report `dir` follows report language. Visually checked with screenshots | ✅ |
-| 14 | Offline functionality | E2E 14: service worker controls the page → network set offline → navigation, edits and reload all work; offline indicator shown | ✅ |
-| 15 | Responsive layouts | E2E 15: phone 390 px, tablet 820 px, tablet landscape 1180 px — no horizontal page overflow on the workspace, all seven steps or the report. Visually checked | ✅ |
-| 16 | GitHub Pages deployment | E2E 16: assets, manifest and `sw.js` resolve under the base path; hash deep links work on a static host. GitHub Actions run #1: type-check, unit and E2E tests, build and deploy all passed. Live site checked in Chrome at https://vkik.github.io/problemsolving-lab/: service worker active with the correct scope, manifest served, sample loads, step and report deep links work, all 11 report sections present, no console errors | ✅ live |
+| File | Covers |
+|------|--------|
+| `src/lib/saveQueue.test.ts` (12) | Failed snapshots retained and persisted on retry; back-off schedule then `failed`; manual retry; `flush()` reports failure; one write at a time with coalescing; an older snapshot never overwrites a newer one after a failure; delete waits for the in-flight write; unsaved detection; no debounce timer. Tab lifecycle: flush on hidden, flush on `pagehide`, confirm on `beforeunload` only when unsaved, unregister |
+| `src/lib/evaluation.test.ts` (21) | Finding support (validated / unlinked / provisional for each reason; documented uncertainty → limitation, undocumented → needs evidence; evidence classes stay distinct). Recommendation chains (backed, limited, broken → unsupported, precautionary only with a justification, investigate = n/a). Analyses and define states. Empty project: no vacuous passes. v1 → v2 migration. Structure observations (and that they never change the review). Synthesis restatement and sentence-count warnings |
+| `src/lib/core.test.ts` (22) | Tree operations, referential integrity on delete, import validation and sanitising, duplication with remapped ids, MECE signature, sample four-state evaluation, prioritization, SMART hints |
 
-Additional checks: duplicate, archive and delete with confirmation (E2E); SMART hints never set a verdict, and the drafted statement contains only the user’s text (E2E and unit); assumption → fact requires a verification note, and cancelling keeps it an assumption (E2E); imported unverified “facts” become assumptions (unit); duplication keeps every link with fresh ids (unit); the sample project’s completion status is realistic (unit).
+## Acceptance tests
 
-## Defects found during testing and fixed
+### Original criteria (brief v1.0, §9) — `tests/e2e/app.spec.ts`
 
-| Defect | Found by | Fix |
-|--------|----------|-----|
-| In Arabic, Latin text in the issue-tree SVG inherited RTL direction and spilled outside its boxes | RTL screenshots | The SVG coordinate system is pinned to LTR; mirroring is handled by the layout; Arabic lines are right-aligned |
-| An edit made less than 400 ms before a reload or tab close could be lost (debounced saving) | E2E offline and dashboard tests | Writes now start immediately and coalesce while one is in flight |
-| An empty project showed 3% progress (a vacuously true criterion) | Unit test | The criterion requires at least one recommendation |
-| 3 px horizontal overflow on phones from the Next-step button | E2E responsive test | Step navigation buttons wrap |
-| “Ready to work offline” toast appeared in English when the interface was Arabic | Screenshot | Toast reads the current language when it fires |
-| Coaching panel pushed the workspace far down on phones and tablets | Screenshot | Folded into one collapsible “Coaching” section below 1280 px |
+| # | Criterion | Result |
+|---|-----------|--------|
+| 1–2 | Create, save, reload, persistence | ✅ |
+| 3–4 | Issue tree editing; review workflow (now six questions — acceptance stays disabled until all are answered consistently) | ✅ |
+| 5–9 | Prioritize → work plan → analyses → findings → recommendations, with links and traceability | ✅ |
+| 10 | Report with all 11 sections; print; A4 PDF render | ✅ |
+| 11 | JSON export / import / copy-on-reimport / invalid file rejected | ✅ |
+| — | Dashboard duplicate, archive, delete with confirmation | ✅ |
+| 12–13 | Arabic / English switch, RTL layout, independent report language | ✅ |
+| 14 | Offline after first visit | ✅ |
+| 15 | No horizontal overflow at 390, 820 and 1180 px | ✅ (3 tests) |
+| 16 | Base path, manifest, service worker, hash deep links | ✅ |
+
+### v1.1 — `tests/e2e/v11.spec.ts`
+
+Storage faults are simulated by making `IDBObjectStore.put` throw a `QuotaExceededError`.
+
+| Phase | Test | Result |
+|-------|------|--------|
+| 1 | One failed write: banner and *retrying* state, automatic retry, value persists after reload | ✅ |
+| 1 | Persistent failure: change kept in the tab, *Retry now* reports still failing, *Export backup* contains the unsaved change, recovery after storage returns, value persists | ✅ |
+| 1 | Import during a storage failure reports it rather than claiming success; recovery | ✅ |
+| 2 | Sample: synthesis *complete with documented limitations*; removing a finding's documented uncertainty → *needs further evidence* | ✅ |
+| 2 | Breaking finding 1's chain makes its recommendation *unsupported* and the step *needs further evidence*; precautionary without a justification → *incomplete*, with one → *precautionary* and *complete with limitations*; the report never shows it as evidence-backed | ✅ |
+| 3 | Role tag feeds the causes-vs-symptoms observation; observations don't change acceptance; a non-MECE answer withdraws acceptance | ✅ |
+| 3 | Near-duplicate, tree-type and untagged observations on a weak tree | ✅ |
+| 4 | Synthesis ladder and worked example; restatement warning; one-sentence draft built only from the user's insight and implication | ✅ |
+| — | A v1 backup imports, upgrades to v2 and shows the new-questions notice | ✅ |
+
+## Regression tests for every defect fixed
+
+| Defect (found in) | Fixed by | Regression test |
+|-------------------|----------|-----------------|
+| Latin text in the issue tree spilled outside its boxes in RTL (v1.0) | SVG pinned to LTR, layout mirrored | e2e “RTL: Latin text in the issue tree stays inside its boxes” |
+| Debounced saving could lose an edit made just before a reload (v1.0) | Immediate writes | unit “starts writing immediately — no debounce timer” |
+| Empty project showed progress through vacuous criteria (v1.0; recurred with new SMART criteria in v1.1) | Criteria require substance | unit “an empty project is incomplete everywhere”; e2e “an empty project shows 0%…” |
+| 3 px horizontal overflow on phones (v1.0) | Step navigation wraps | e2e responsive tests |
+| Offline-ready message in English when the interface was Arabic (v1.0) | Reads the current language | e2e “offline-ready message follows the interface language” |
+| Coaching pushed the workspace down on tablets (v1.0) | Folded below 1280 px | e2e “on tablets the coaching panel is folded…” |
+| Reload within milliseconds of an action aborted the write (v1.0, CI run #2) | Unsaved-change confirmation; tests wait for “saved” | unit lifecycle `beforeunload` tests; e2e dashboard test |
+| Dialog Escape handler referenced `close` before its declaration (v1.1 lint) | Self-contained handler | e2e “Escape cancels a confirmation dialog…” |
+| **Failed IndexedDB writes were discarded** (v1.1 audit) | Save queue keeps failed snapshots | unit “keeps a failed snapshot…”; e2e Phase 1 tests |
+| `flush()` reported success after a failure (v1.1 audit) | Returns `{ ok, unsaved, error }` | unit “flush resolves with a failure report…” |
+| Deleting during an in-flight write could recreate the project (v1.1 audit) | `discard()` waits for the write | unit “discard waits for the in-flight write…” |
+| Import claimed success when storage failed (v1.1 audit) | Import checks the write result | e2e “import reports a storage failure…” |
+| Findings backed only by inconclusive/untested analyses counted as fully complete (v1.1 audit) | Finding support levels | unit “provisional when …”; e2e Phase 2 |
+| A recommendation with a broken chain counted as traceable (v1.1 audit) | Recommendation chain rules | unit “a broken chain is unsupported…”; e2e Phase 2 |
+
+No existing test was removed or weakened. The v1.0 MECE test now also answers the two new questions. The completion assertions now check the explicit state attribute instead of the old “Step complete” label.
 
 ## Known limitations
 
-- **PDF** is produced with the browser’s *Print → Save as PDF* (print stylesheet, A4, page breaks between major sections). No PDF library is bundled, which keeps the app small and fully offline.
-- **Issue-tree image export** uses system fonts, because an SVG drawn to a canvas cannot use web fonts. Arabic renders correctly with any system Arabic font.
-- **SMART hints** are keyword heuristics (English and Arabic). They prompt reflection; the assessment itself is always the user’s.
-- **Collaboration** is not in version 1. The data model (stable ids, timestamps, JSON backups) is ready for a future sync layer.
-- **Storage is per browser.** Clearing site data deletes projects; use backups to move between devices.
-- The **sample project** is in English; the interface around it switches to Arabic normally.
+- **Closing the tab.** The app saves on every edit, flushes when the tab is hidden and asks for confirmation before closing with unsaved changes. A write that starts while the page is being closed may still be aborted by the browser; this cannot be guaranteed by a web app.
+- **Retries** stop after four automatic attempts (≈ 44 s). Unsaved changes then stay in the tab until *Retry now*, the next edit, or the tab is hidden.
+- **Structure observations and SMART hints** are heuristics (English and Arabic keywords, word overlap). They prompt reflection and never decide.
+- **Evidence quality** affects status only through the ratings the user enters (low reliability, accuracy or confidence). Unrated evidence is not penalised.
+- **PDF** output uses the browser's *Print → Save as PDF*. Issue-tree image export uses system fonts.
+- **Lint warnings** (22) are style-level (fast-refresh export structure); lint fails CI only on errors.
+- **Pages deploy actions** (`configure-pages`, `upload-pages-artifact`, `deploy-pages`) are kept at their proven major versions. They still trigger GitHub's Node 20 deprecation notice; they only run on `main`, so upgrade them in a separate change that can be verified with a deploy.
+- **Collaboration and sync** are not included. Projects live in one browser; use backups to move them.

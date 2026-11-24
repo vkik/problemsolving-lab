@@ -72,6 +72,8 @@ export function emptyProject(partial: Partial<Project> = {}): Project {
         missing: { answer: 'unanswered', note: '' },
         logic: { answer: 'unanswered', note: '' },
         contributes: { answer: 'unanswered', note: '' },
+        causes: { answer: 'unanswered', note: '' },
+        treeType: { answer: 'unanswered', note: '' },
       },
       meceStatus: 'not-reviewed',
       meceReviewedAt: null,
@@ -94,7 +96,7 @@ export function emptyProject(partial: Partial<Project> = {}): Project {
 }
 
 export function newNode(parentId: string | null, order: number, text = ''): IssueNode {
-  return { id: uid('iss'), parentId, text, note: '', order, collapsed: false }
+  return { id: uid('iss'), parentId, text, note: '', order, collapsed: false, kind: '' }
 }
 
 export function newTask(issueId = ''): WorkTask {
@@ -179,6 +181,8 @@ export function newRecommendation(): Recommendation {
     horizon: 'short',
     disposition: 'recommended',
     rejectionReason: '',
+    precautionary: false,
+    precautionaryJustification: '',
   }
 }
 

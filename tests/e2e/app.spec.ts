@@ -97,14 +97,18 @@ test('3–4. issue tree editing and the MECE review workflow', async ({ page }) 
   await page.getByTestId('mece-missing').getByRole('radio', { name: 'No', exact: true }).click()
   await page.getByTestId('mece-logic').getByRole('radio', { name: 'Yes', exact: true }).click()
   await page.getByTestId('mece-contributes').getByRole('radio', { name: 'Yes', exact: true }).click()
+  // v1.1: the two new questions (causes vs symptoms, tree type) are also required
+  await expect(page.getByTestId('mece-status-accepted')).toBeDisabled()
+  await page.getByTestId('mece-causes').getByRole('radio', { name: 'Yes', exact: true }).click()
+  await page.getByTestId('mece-treeType').getByRole('radio', { name: 'Yes', exact: true }).click()
   await page.getByTestId('mece-status-accepted').click()
   await page.getByTestId('hyp-initial').fill('Grid outages are the main cause')
-  await expect(page.getByTestId('step-status')).toHaveText('Step complete')
+  await expect(page.getByTestId('step-status')).toHaveAttribute('data-status', 'complete')
   // changing the tree after acceptance requires a new review
   await page.getByTestId('add-branch').click()
   await page.locator('[data-node-input]').last().fill('Operations')
   await expect(page.getByTestId('mece-changed')).toBeVisible()
-  await expect(page.getByTestId('step-status')).not.toHaveText('Step complete')
+  await expect(page.getByTestId('step-status')).toHaveAttribute('data-status', 'incomplete')
 })
 
 test('5–9. prioritize → work plan → analyses → findings → recommendations, with links', async ({ page }) => {
@@ -126,7 +130,7 @@ test('5–9. prioritize → work plan → analyses → findings → recommendati
   await expect(page.getByTestId('priority-matrix')).toContainText('1.1')
   await page.getByTestId('rank-row').first().getByTestId('select-issue').check()
   await page.getByTestId('rank-row').first().getByTestId('justification').fill('Biggest lever we control')
-  await expect(page.getByTestId('step-status')).toHaveText('Step complete')
+  await expect(page.getByTestId('step-status')).toHaveAttribute('data-status', 'complete')
 
   // 6. Work plan
   await page.goto(projectUrl(page) + '/step/workplan')
@@ -199,7 +203,7 @@ test('5–9. prioritize → work plan → analyses → findings → recommendati
   await r.getByTestId('rec-findings').getByText('Most outages follow').click()
   await expect(r.getByTestId('traceability')).toContainText('Outage log matches grid failure log')
   await expect(r.getByTestId('traceability')).toContainText('Verified fact')
-  await expect(page.getByTestId('step-status')).toHaveText('Step complete')
+  await expect(page.getByTestId('step-status')).toHaveAttribute('data-status', 'complete')
 
   // 10. Report compiles everything; print is wired to the browser print dialog
   await page.goto(projectUrl(page) + '/report')

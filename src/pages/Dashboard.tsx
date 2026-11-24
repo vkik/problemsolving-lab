@@ -83,7 +83,12 @@ function ProjectCard({ p }: { p: Project }) {
       confirmLabel: t('common.delete'),
       danger: true,
     })
-    if (ok) await remove(p.id)
+    if (!ok) return
+    try {
+      await remove(p.id)
+    } catch {
+      toast(t('dash.deleteFailed'), 'error')
+    }
   }
 
   return (
@@ -223,8 +228,10 @@ export function Dashboard() {
     if (!file) return
     try {
       const { projects: imported, copies } = await prepareImport(file, new Set(Object.keys(projects)))
-      for (const p of imported) await put(p)
-      toast(`${t('dash.importDone', { n: imported.length })}${copies ? ' ' + t('dash.importCopyNote') : ''}`)
+      let saved = true
+      for (const p of imported) saved = (await put(p)).ok && saved
+      if (!saved) toast(t('dash.importNotSaved', { n: imported.length }), 'error')
+      else toast(`${t('dash.importDone', { n: imported.length })}${copies ? ' ' + t('dash.importCopyNote') : ''}`)
     } catch (err) {
       const code = err instanceof ImportError ? err.message : 'failed'
       toast(t(`import.${code}` as never) || t('import.failed'), 'error')
@@ -237,7 +244,8 @@ export function Dashboard() {
       return
     }
     const p = buildSampleProject()
-    await put(p)
+    const r = await put(p)
+    if (!r.ok) toast(t('save.bannerTitle', { n: r.unsaved.length }), 'error')
     navigate(`/p/${p.id}`)
   }
 

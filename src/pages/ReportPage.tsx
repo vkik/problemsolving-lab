@@ -3,12 +3,16 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Download, Printer } from 'lucide-react'
 import { formatDate, translate, useT, type MessageKey } from '../i18n'
 import { useProject } from '../store/projects'
-import { completedSteps, rootQuestion, allEvidence } from '../lib/progress'
+import { completedSteps, evaluateStep, rootQuestion } from '../lib/progress'
+import { findingSupport } from '../lib/evidence'
+import { CHECKS } from '../content/criteria'
+import { SupportBadge } from '../steps/Synthesis'
+import { ChainBadge } from '../steps/Recommendations'
 import { flatten, labelMap } from '../lib/tree'
 import { rankedIssues, score } from '../lib/priority'
 import { rankedFindings } from '../lib/integrity'
 import { exportProjects } from '../lib/files'
-import { HORIZONS, MECE_KEYS, QUALITY_KEYS, SMART_KEYS, type Lang, type Level, type Project } from '../lib/types'
+import { HORIZONS, MECE_KEYS, QUALITY_KEYS, SMART_KEYS, STEP_KEYS, type Lang, type Level, type Project } from '../lib/types'
 import { IssueTreeSvg } from '../components/IssueTreeSvg'
 import { PriorityMatrix } from '../steps/Prioritize'
 import { analysisWarnings, EVIDENCE_STYLE, RESULT_STYLE } from '../steps/Analyses'
@@ -83,7 +87,6 @@ function Report({ p, lang }: { p: Project; lang: Lang }) {
   const investigate = recs.filter((r) => r.disposition === 'investigate')
   const rejected = recs.filter((r) => r.disposition === 'rejected')
   const ranked = rankedIssues(p)
-  const evidence = allEvidence(p)
   const date = (s: string) => (s ? formatDate(s, lang) : '–')
   const sectionTitles = Array.from({ length: 11 }, (_, i) => rt(`report.s${i + 1}` as MessageKey))
   const horizonOrder = (h: string) => HORIZONS.indexOf(h as never)
@@ -188,6 +191,17 @@ function Report({ p, lang }: { p: Project; lang: Lang }) {
             )}
           </div>
         </div>
+        <div className="mt-6">
+          <p className="mb-2 font-semibold">{rt('report.methodStatus')}</p>
+          <Table
+            head={[rt('report.step'), rt('report.status'), rt('eval.checks')]}
+            rows={STEP_KEYS.map((s, i) => {
+              const ev = evaluateStep(p, s)
+              return [`${i + 1}. ${rt(`step.${s}`)}`, rt(`eval.${ev.status}`), String(ev.issues.length)]
+            })}
+            testId="report-status"
+          />
+        </div>
       </Section>
 
       <Section n={2} title={sectionTitles[1]}>
@@ -229,6 +243,7 @@ function Report({ p, lang }: { p: Project; lang: Lang }) {
                 <li key={f.node.id} style={{ paddingInlineStart: `${(f.depth - 1) * 18}px` }} dir="auto">
                   <span className="me-2 font-semibold text-teal-700">{f.label}</span>
                   {f.node.text}
+                  {f.node.kind && <span className="ms-2 text-xs text-navy-700">({rt(`kind.${f.node.kind}`)})</span>}
                 </li>
               ))}
             </ul>
@@ -359,15 +374,21 @@ function Report({ p, lang }: { p: Project; lang: Lang }) {
         ) : (
           <div className="space-y-5">
             {findings.map((f, i) => {
-              const ev = evidence.filter((x) => f.evidenceIds.includes(x.evidence.id))
-              const an = p.analyses.filter((a) => f.analysisIds.includes(a.id))
+              const support = findingSupport(p, f)
+              const ev = support.evidence
+              const an = support.analyses
               return (
                 <div key={f.id} className="avoid-break">
                   <div className="mb-2 flex gap-3 rounded-lg border-s-4 border-gold-500 bg-gold-100/40 p-3">
                     <span className="text-lg font-bold text-gold-600">{i + 1}</span>
-                    <p className="text-[15px] font-medium leading-snug" dir="auto">
-                      {f.insight || f.discovery || '…'}
-                    </p>
+                    <div>
+                      <p className="text-[15px] font-medium leading-snug" dir="auto">
+                        {f.insight || f.discovery || '…'}
+                      </p>
+                      <div className="mt-1">
+                        <SupportBadge support={support} t={rt} />
+                      </div>
+                    </div>
                   </div>
                   <div className="grid gap-x-6 ps-2 sm:grid-cols-2">
                     <Field label={rt('syn.discovery')} value={f.discovery} />
@@ -417,8 +438,11 @@ function Report({ p, lang }: { p: Project; lang: Lang }) {
                   <h3 className="font-semibold" dir="auto">
                     9.{i + 1} {r.title || r.action || '…'}
                   </h3>
-                  <span className="badge bg-white text-navy-800 ring-1 ring-navy-100">
-                    {rt(`rec.d.${r.disposition}`)} · {rt(`rec.h.${r.horizon}`)}
+                  <span className="flex flex-wrap items-center gap-1">
+                    <ChainBadge rec={r} project={p} t={rt} />
+                    <span className="badge bg-white text-navy-800 ring-1 ring-navy-100">
+                      {rt(`rec.d.${r.disposition}`)} · {rt(`rec.h.${r.horizon}`)}
+                    </span>
                   </span>
                 </div>
                 <div className="grid gap-x-6 sm:grid-cols-2">
@@ -432,6 +456,7 @@ function Report({ p, lang }: { p: Project; lang: Lang }) {
                   <Field label={rt('rec.deadline')} value={r.deadline ? `${date(r.startDate)} → ${date(r.deadline)}` : ''} />
                   <Field label={rt('rec.kpi')} value={r.kpi} />
                   <Field label={rt('rec.verification')} value={r.verification} />
+                  {r.precautionary && <Field label={rt('rec.precautionaryJustification')} value={r.precautionaryJustification} />}
                 </div>
                 <p className="text-xs text-navy-700" dir="auto">
                   <span className="font-semibold">{rt('rec.findings')}: </span>
@@ -477,6 +502,15 @@ function Report({ p, lang }: { p: Project; lang: Lang }) {
             [rt('report.openQuestions'), gaps],
             [rt('report.untested'), untested.map((a) => `${a.hypothesis || a.title} (${rt(`an.r.${a.result}`)})`)],
             [rt('report.investigate'), investigate.map((r) => `${r.title || r.action}${r.owner ? ` — ${r.owner}` : ''}`)],
+            [
+              rt('report.qualityChecks'),
+              STEP_KEYS.flatMap((s) =>
+                evaluateStep(p, s).issues.map(
+                  (iss) =>
+                    `${rt(`step.${s}`)} — ${iss.level === 'needs-evidence' ? rt('eval.needsEvidence') : rt('eval.limitation')}: ${(CHECKS[iss.key]?.[lang] ?? iss.key).replace('{item}', iss.key === 'define.smartPartly' ? rt(`smart.${iss.item}` as MessageKey) : iss.item)}`,
+                ),
+              ),
+            ],
           ].map(([title, items]) => (
             <div key={title as string} className="avoid-break">
               <p className="mb-1 font-semibold">{title as string}</p>
