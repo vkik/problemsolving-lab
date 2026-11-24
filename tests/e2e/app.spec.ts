@@ -254,8 +254,11 @@ test('11. export a JSON backup and import it again', async ({ page }) => {
 
 test('dashboard: duplicate, archive and delete with confirmation', async ({ page }) => {
   await createProject(page, 'Original')
+  await waitSaved(page)
   await page.goto('./')
   await page.getByTestId('duplicate-project').click()
+  await expect(page.getByTestId('ws-title')).toHaveText('Original (copy)')
+  await waitSaved(page)
   await page.goto('./')
   await expect(page.getByTestId('project-card')).toHaveCount(2)
   await page.getByTestId('archive-project').first().click()
@@ -316,6 +319,7 @@ test('14. works offline after the first visit', async ({ page, context }) => {
   await expect(page.getByTestId('step-title')).toHaveText('Conduct analyses')
   await expect(page.getByTestId('offline-indicator')).toBeVisible()
   await page.getByTestId('add-analysis').click()
+  await waitSaved(page)
   await page.reload()
   await expect(page.getByTestId('analysis-card')).toHaveCount(4)
   await context.setOffline(false)

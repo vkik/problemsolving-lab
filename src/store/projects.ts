@@ -122,6 +122,11 @@ export const useProjects = create<State>((set, get) => {
 })
 
 if (typeof window !== 'undefined') {
+  // Closing or reloading the tab cancels an unfinished IndexedDB write, so ask the browser to
+  // confirm leaving while a save is still in progress (normally only a few milliseconds).
+  window.addEventListener('beforeunload', (e) => {
+    if (writing || pending.size > 0) e.preventDefault()
+  })
   const flush = () => void useProjects.getState().flush()
   window.addEventListener('pagehide', flush)
   document.addEventListener('visibilitychange', () => {
