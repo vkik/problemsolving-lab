@@ -1,0 +1,33 @@
+import type { Lang } from '../lib/types'
+
+/** Human-readable labels for the completion criteria computed in lib/progress.ts */
+export const CRITERIA: Record<string, Record<Lang, string>> = {
+  'define.question': { en: 'A problem question is written', ar: 'سؤال المشكلة مكتوب' },
+  'define.worksheet': { en: 'At least 6 of the 8 core worksheet fields are completed', ar: 'اكتمال 6 على الأقل من الحقول الأساسية الثمانية في ورقة العمل' },
+  'define.smartAssessed': { en: 'All five SMART criteria are assessed', ar: 'تقييم معايير SMART الخمسة جميعها' },
+  'define.smartMet': { en: 'You judge every SMART criterion as met', ar: 'تحكم بأن جميع معايير SMART متحققة' },
+  'define.statement': { en: 'A final problem statement is written', ar: 'كتابة بيان المشكلة النهائي' },
+  'structure.branches': { en: 'At least two top-level branches', ar: 'فرعان رئيسيان على الأقل' },
+  'structure.depth': { en: 'At least one branch is broken down further', ar: 'تقسيم فرع واحد على الأقل إلى مستوى أدنى' },
+  'structure.mece': { en: 'MECE review accepted for the current tree', ar: 'قبول مراجعة MECE للشجرة الحالية' },
+  'structure.hypothesis': { en: 'An initial hypothesis is recorded', ar: 'تسجيل فرضية أولية' },
+  'prioritize.allScored': { en: 'Every leaf issue has impact and feasibility ratings', ar: 'لكل قضية طرفية تقييم للأثر وقابلية التنفيذ' },
+  'prioritize.rationale': { en: 'Every scored issue has a rationale', ar: 'لكل قضية مُقيّمة مبرر' },
+  'prioritize.selected': { en: 'At least one issue selected for the work plan', ar: 'اختيار قضية واحدة على الأقل لخطة العمل' },
+  'prioritize.justified': { en: 'Each selected issue has a justification', ar: 'لكل قضية مختارة مبرر' },
+  'workplan.coverage': { en: 'Every selected issue has a planned analysis', ar: 'لكل قضية مختارة تحليل مخطط' },
+  'workplan.hypothesis': { en: 'Every planned analysis states a hypothesis', ar: 'كل تحليل مخطط يذكر فرضية' },
+  'workplan.ownerDate': { en: 'Every planned analysis has an owner and a due date', ar: 'لكل تحليل مخطط مسؤول وتاريخ استحقاق' },
+  'analyses.linked': { en: 'Every analysis is linked to an issue and a hypothesis', ar: 'كل تحليل مرتبط بقضية وفرضية' },
+  'analyses.evidence': { en: 'Every tested analysis has evidence', ar: 'لكل تحليل مُختبر أدلة' },
+  'analyses.tested': { en: 'At least one hypothesis has a test result', ar: 'لفرضية واحدة على الأقل نتيجة اختبار' },
+  'analyses.conclusion': { en: 'Tested analyses state a conclusion and limitations', ar: 'التحليلات المختبرة تذكر الخلاصة والقيود' },
+  'synthesis.findings': { en: 'Every finding has an insight sentence and an implication', ar: 'لكل نتيجة جملة استنتاج وأثر' },
+  'synthesis.linked': { en: 'Every finding is linked to analyses or evidence', ar: 'كل نتيجة مرتبطة بتحليلات أو أدلة' },
+  'synthesis.soWhat': { en: 'All four “So what?” questions answered', ar: 'الإجابة عن أسئلة «إذن ماذا؟» الأربعة' },
+  'recommendations.exists': { en: 'At least one recommended action', ar: 'إجراء موصى به واحد على الأقل' },
+  'recommendations.ownerTimeline': { en: 'Each recommended action has an owner and a deadline', ar: 'لكل إجراء موصى به مسؤول وموعد نهائي' },
+  'recommendations.kpi': { en: 'Each recommended action has a KPI and verification method', ar: 'لكل إجراء موصى به مؤشر أداء وطريقة تحقق' },
+  'recommendations.traceable': { en: 'Each recommended action is linked to a finding', ar: 'كل إجراء موصى به مرتبط بنتيجة' },
+  'recommendations.rejectedJustified': { en: 'Every rejected option has a justification', ar: 'لكل خيار مرفوض مبرر' },
+}
