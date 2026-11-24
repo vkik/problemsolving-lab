@@ -8,6 +8,8 @@ It is a working lab rather than a set of forms. Each step coaches you to think b
 Problem → Issues → Priorities → Work plan → Analyses (evidence) → Findings → Recommendations
 ```
 
+**Live app:** https://vkik.github.io/problemsolving-lab/
+
 > **Disclaimer.** This is an independent learning and practice tool. It is **not** an official McKinsey product and is **not** endorsed by McKinsey & Company or McKinsey.org.
 
 ---

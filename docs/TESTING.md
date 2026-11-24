@@ -29,7 +29,7 @@ Every end-to-end test also fails if the browser logs any console error or uncaug
 | 13 | RTL layout | E2E 12–13: `<html dir="rtl" lang="ar">`, step navigation on the right, Arabic text rendered in the tree, report `dir` follows report language. Visually checked with screenshots | ✅ |
 | 14 | Offline functionality | E2E 14: service worker controls the page → network set offline → navigation, edits and reload all work; offline indicator shown | ✅ |
 | 15 | Responsive layouts | E2E 15: phone 390 px, tablet 820 px, tablet landscape 1180 px — no horizontal page overflow on the workspace, all seven steps or the report. Visually checked | ✅ |
-| 16 | GitHub Pages deployment | E2E 16: assets, manifest and `sw.js` resolve under the base path; hash deep links work on a static host. Live deployment: see README | ✅ locally |
+| 16 | GitHub Pages deployment | E2E 16: assets, manifest and `sw.js` resolve under the base path; hash deep links work on a static host. GitHub Actions run #1: type-check, unit and E2E tests, build and deploy all passed. Live site checked in Chrome at https://vkik.github.io/problemsolving-lab/: service worker active with the correct scope, manifest served, sample loads, step and report deep links work, all 11 report sections present, no console errors | ✅ live |
 
 Additional checks: duplicate, archive and delete with confirmation (E2E); SMART hints never set a verdict, and the drafted statement contains only the user’s text (E2E and unit); assumption → fact requires a verification note, and cancelling keeps it an assumption (E2E); imported unverified “facts” become assumptions (unit); duplication keeps every link with fresh ids (unit); the sample project’s completion status is realistic (unit).
 
