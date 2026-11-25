@@ -86,6 +86,33 @@ test.describe('Phase 1: save reliability', () => {
     await expect(page.getByTestId('define-gap')).toHaveValue('Must survive a storage outage')
   })
 
+  test('D7: reload after a failed write restores the unsaved change from the recovery copy', async ({ page }) => {
+    await installStorageFault(page) // the fault is re-installed on reload with 0 failures (storage healthy again)
+    page.on('dialog', (d) => void d.accept()) // the browser's "leave page?" warning
+    await loadSample(page)
+    await page.goto(projectUrl(page) + '/step/define')
+    await waitSaved(page)
+    await setFailures(page, 1000)
+    await page.getByTestId('define-gap').fill('Typed while storage was failing')
+    await expect(page.getByTestId('save-state')).toHaveAttribute('data-state', 'retrying')
+    await expect(page.getByTestId('save-label')).toHaveText('Save failed — retrying')
+    await expect(page.getByTestId('journal-ok')).toBeVisible()
+    await page.reload()
+    await expect(page.getByTestId('recovered-notice')).toContainText('Illustrative sample')
+    await expect(page.getByTestId('define-gap')).toHaveValue('Typed while storage was failing')
+    await waitSaved(page)
+    await page.reload()
+    await expect(page.getByTestId('recovered-notice')).toHaveCount(0)
+    await expect(page.getByTestId('define-gap')).toHaveValue('Typed while storage was failing')
+  })
+
+  test('save indicator distinguishes queued from persisted changes', async ({ page }) => {
+    await loadSample(page)
+    await page.goto(projectUrl(page) + '/step/define')
+    await waitSaved(page)
+    await expect(page.getByTestId('save-label')).toHaveText('Saved — all changes stored on this device')
+  })
+
   test('import reports a storage failure instead of claiming success', async ({ page }) => {
     await installStorageFault(page)
     await loadSample(page)

@@ -3,15 +3,24 @@
  *
  * Every edit goes through `update(id, recipe)`. The new snapshot is handed to a SaveQueue
  * (lib/saveQueue.ts), which writes it to IndexedDB immediately, one write at a time, keeps failed
- * snapshots until they are persisted, and retries with back-off. The save indicator and the
- * recovery banner read the queue's status from this store.
+ * snapshots until they are persisted, and retries with back-off. Unsaved snapshots are also
+ * copied to a synchronous recovery journal (lib/journal.ts) when a write fails or the tab is
+ * hidden/unloading; on the next start, newer journal copies are restored and saved again.
+ * The save indicator and the recovery banner read the queue's status from this store.
  */
 import { create } from 'zustand'
 import * as db from '../lib/db'
 import { duplicateProject, emptyProject, nowIso } from '../lib/factory'
 import { SaveQueue, type FlushResult, type SaveSnapshot } from '../lib/saveQueue'
 import { registerLifecycle } from '../lib/lifecycle'
+import { createJournal, type Journal } from '../lib/journal'
+import { sanitizeProject } from '../lib/migrate'
 import type { Project } from '../lib/types'
+
+export interface RecoveredProject {
+  id: string
+  title: string
+}
 
 export type SaveState = SaveSnapshot['status']
 
@@ -21,6 +30,9 @@ interface State {
   projects: Record<string, Project>
   saveState: SaveState
   save: SaveSnapshot
+  /** Projects whose unsaved changes were restored from the recovery journal at start-up. */
+  recovered: RecoveredProject[]
+  dismissRecovered: () => void
   init: () => Promise<void>
   create: (partial?: Partial<Project>) => Project
   update: (id: string, recipe: (draft: Project) => void, opts?: { touch?: boolean }) => void
@@ -34,8 +46,10 @@ interface State {
 }
 
 export const useProjects = create<State>((set, get) => {
+  const journal: Journal<Project> = createJournal<Project>()
   const queue = new SaveQueue<Project>({
     write: (p) => db.save(p),
+    journal,
     onChange: (s) => {
       if (s.lastError && (s.status === 'retrying' || s.status === 'failed')) console.warn('Save failed; changes kept for retry:', s.lastError)
       set({ save: s, saveState: s.status })
@@ -50,16 +64,41 @@ export const useProjects = create<State>((set, get) => {
     projects: {},
     saveState: 'idle',
     save: queue.snapshot(),
+    recovered: [],
+    dismissRecovered: () => set({ recovered: [] }),
 
     async init() {
       if (get().loaded) return
+      let stored: Project[] = []
       try {
-        const all = await db.loadAll()
-        set({ projects: Object.fromEntries(all.map((p) => [p.id, p])), loaded: true })
+        stored = await db.loadAll()
       } catch (err) {
         console.error('Could not open storage', err)
-        set({ loaded: true, loadError: err instanceof Error ? err.message : String(err) })
+        set({ loadError: err instanceof Error ? err.message : String(err) })
       }
+      const projects: Record<string, Project> = Object.fromEntries(stored.map((p) => [p.id, p]))
+      // Restore recovery copies that are newer than what storage holds.
+      const recovered: RecoveredProject[] = []
+      for (const raw of journal.entries()) {
+        let copy: Project
+        try {
+          copy = sanitizeProject(raw)
+        } catch {
+          continue
+        }
+        const current = projects[copy.id]
+        // Restore when the copy is newer — or equally recent but different (edits within the same millisecond).
+        const newer = !current || copy.updatedAt > current.updatedAt || (copy.updatedAt === current.updatedAt && JSON.stringify(copy) !== JSON.stringify(current))
+        if (newer) {
+          projects[copy.id] = copy
+          recovered.push({ id: copy.id, title: copy.title })
+          queue.hold(copy)
+        } else {
+          journal.remove(copy.id) // storage already has this version or a newer one
+        }
+      }
+      set({ projects, loaded: true, recovered })
+      if (recovered.length > 0) void queue.flush()
       void db.requestPersistence()
     },
 
@@ -98,6 +137,7 @@ export const useProjects = create<State>((set, get) => {
     async remove(id) {
       await queue.discard(id)
       await db.remove(id)
+      journal.remove(id)
       set((s) => {
         const next = { ...s.projects }
         delete next[id]

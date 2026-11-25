@@ -10,12 +10,24 @@
  *   exhausted the queue reports `failed` and waits for a manual retry, a new edit or a flush.
  * - `flush()` always resolves, and reports whether everything was persisted.
  *
+ * - With a journal (journal.ts), a recovery copy of every unsaved snapshot is kept synchronously
+ *   when a write fails and when the tab is hidden or unloading, and removed once persisted.
+ *
  * What it cannot guarantee: a write started while the tab is being closed may be aborted by the
- * browser. The lifecycle handlers (see lifecycle.ts) flush on hide and warn before unload, but
- * nothing can make an asynchronous IndexedDB write finish after the page is gone.
+ * browser. The lifecycle handlers (see lifecycle.ts) take a journal copy and flush on hide, and
+ * warn before unload, but nothing can make an asynchronous IndexedDB write finish after the page
+ * is gone. The journal is the recovery path for that case.
+ *
+ * Status meanings (what the user sees):
+ *   idle     — nothing to save yet
+ *   saving   — a write is in progress (`unsaved` counts changes not yet confirmed)
+ *   unsaved  — changes are queued but no write is running (e.g. restored from the journal)
+ *   saved    — every change has been confirmed by storage
+ *   retrying — a write failed; an automatic retry is scheduled ("Save failed")
+ *   failed   — automatic retries are exhausted ("Retry required")
  */
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'retrying' | 'failed'
+export type SaveStatus = 'idle' | 'saving' | 'unsaved' | 'saved' | 'retrying' | 'failed'
 
 export interface SaveSnapshot {
   status: SaveStatus
@@ -27,6 +39,8 @@ export interface SaveSnapshot {
   nextRetryAt: number | null
   lastError: string | null
   lastSavedAt: number | null
+  /** Whether the latest recovery copy could be written (null: no copy needed or no journal). */
+  journalOk: boolean | null
 }
 
 export interface FlushResult {
@@ -44,6 +58,8 @@ export interface SaveQueueOptions<T> {
   now?: () => number
   setTimer?: (fn: () => void, ms: number) => unknown
   clearTimer?: (handle: unknown) => void
+  /** Optional recovery journal; see journal.ts. */
+  journal?: { put: (item: T) => boolean; remove: (id: string) => void }
 }
 
 export const DEFAULT_RETRY_DELAYS = [1000, 3000, 10000, 30000]
@@ -57,6 +73,7 @@ export class SaveQueue<T extends { id: string }> {
   private nextRetryAt: number | null = null
   private lastError: string | null = null
   private lastSavedAt: number | null = null
+  private journalOk: boolean | null = null
   private readonly delays: number[]
   private readonly now: () => number
   private readonly setTimer: (fn: () => void, ms: number) => unknown
@@ -75,6 +92,7 @@ export class SaveQueue<T extends { id: string }> {
   /** Queue the latest snapshot of a project. Writing starts at once unless a retry is pending. */
   enqueue(item: T): void {
     this.pending.set(item.id, item)
+    if (this.status === 'retrying' || this.status === 'failed') this.journalPending()
     if (this.timer) {
       // Waiting for a scheduled retry: keep the newest snapshot and let the back-off run.
       this.emit()
@@ -114,6 +132,26 @@ export class SaveQueue<T extends { id: string }> {
     this.emit()
   }
 
+  /**
+   * Synchronously store recovery copies of every snapshot not yet persisted.
+   * Called when a write fails and when the tab is hidden or unloading.
+   */
+  journalPending(): boolean | null {
+    const j = this.opts.journal
+    if (!j || this.pending.size === 0) return this.journalOk
+    let ok = true
+    for (const item of this.pending.values()) ok = j.put(item) && ok
+    this.journalOk = ok
+    return ok
+  }
+
+  /** Mark snapshots as queued without writing (e.g. restored from the journal before storage is ready). */
+  hold(item: T): void {
+    this.pending.set(item.id, item)
+    if (!this.running && !this.timer) this.status = 'unsaved'
+    this.emit()
+  }
+
   hasUnsaved(): boolean {
     return this.pending.size > 0 || this.running !== null
   }
@@ -130,6 +168,7 @@ export class SaveQueue<T extends { id: string }> {
       nextRetryAt: this.nextRetryAt,
       lastError: this.lastError,
       lastSavedAt: this.lastSavedAt,
+      journalOk: this.journalOk,
     }
   }
 
@@ -168,16 +207,22 @@ export class SaveQueue<T extends { id: string }> {
       } catch (err) {
         this.failures++
         this.lastError = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+        this.journalPending()
         this.scheduleRetry()
         return
       }
       // Only remove the snapshot that was written. A newer one queued meanwhile stays and is written next.
-      if (this.pending.get(id) === item) this.pending.delete(id)
+      if (this.pending.get(id) === item) {
+        this.pending.delete(id)
+        // The recovery copy is obsolete once this version is persisted.
+        this.opts.journal?.remove(id)
+      }
       this.failures = 0
       this.lastError = null
       this.lastSavedAt = this.now()
     }
     this.status = 'saved'
+    this.journalOk = null
     this.emit()
   }
 

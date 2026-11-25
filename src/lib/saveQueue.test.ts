@@ -225,3 +225,159 @@ describe('tab lifecycle', () => {
     expect(queue.flush).not.toHaveBeenCalled()
   })
 })
+
+describe('SaveQueue — flush semantics (brief 2C)', () => {
+  it('concurrent flush calls both wait for every write, including edits that arrive mid-flush', async () => {
+    const h = harness()
+    h.q.enqueue({ id: 'a', v: 1 })
+    await h.tick()
+    const f1 = h.q.flush()
+    const f2 = h.q.flush()
+    h.q.enqueue({ id: 'a', v: 2 }) // new change while the first write is active
+    h.q.enqueue({ id: 'b', v: 1 })
+    let settled = 0
+    void f1.then(() => settled++)
+    void f2.then(() => settled++)
+    h.calls[0].resolve()
+    await h.tick()
+    expect(settled).toBe(0) // a2 and b1 are still pending
+    h.calls[1].resolve()
+    await h.tick()
+    expect(settled).toBe(0)
+    h.calls[2].resolve()
+    const [r1, r2] = await Promise.all([f1, f2])
+    expect(r1).toEqual({ ok: true, unsaved: [], error: null })
+    expect(r2.ok).toBe(true)
+    expect(h.stored.get('a')).toBe(2)
+    expect(h.stored.get('b')).toBe(1)
+  })
+
+  it('flush during an active write does not resolve before the write commits', async () => {
+    const h = harness()
+    h.q.enqueue({ id: 'a', v: 1 })
+    await h.tick()
+    let done = false
+    const f = h.q.flush().then((r) => ((done = true), r))
+    await h.tick()
+    expect(done).toBe(false)
+    h.calls[0].resolve()
+    expect((await f).ok).toBe(true)
+  })
+
+  it('flush reports failure for an edit that arrived during the flush and then failed', async () => {
+    const h = harness()
+    h.q.enqueue({ id: 'a', v: 1 })
+    await h.tick()
+    const f = h.q.flush()
+    h.q.enqueue({ id: 'b', v: 1 })
+    h.calls[0].resolve()
+    await h.tick()
+    h.calls[1].reject(new Error('disk full'))
+    const r = await f
+    expect(r).toMatchObject({ ok: false, unsaved: ['b'] })
+  })
+
+  it('multiple rapid edits: only the latest snapshot is written after the in-flight one', async () => {
+    const h = harness()
+    for (let v = 1; v <= 50; v++) h.q.enqueue({ id: 'a', v })
+    await h.tick()
+    h.calls[0].resolve()
+    await h.tick()
+    h.calls[1].resolve()
+    await h.tick()
+    expect(h.calls.map((c) => c.item.v)).toEqual([1, 50])
+    expect(h.stored.get('a')).toBe(50)
+  })
+})
+
+describe('SaveQueue — recovery journal', () => {
+  function withJournal(fail = false) {
+    const store = new Map<string, number>()
+    const removed: string[] = []
+    const journal = {
+      put: (i: Item) => {
+        if (fail) return false
+        store.set(i.id, i.v)
+        return true
+      },
+      remove: (id: string) => {
+        removed.push(id)
+        store.delete(id)
+      },
+    }
+    const calls: { resolve: () => void; reject: (e: Error) => void }[] = []
+    const q = new SaveQueue<Item>({
+      write: () => new Promise<void>((resolve, reject) => calls.push({ resolve, reject })),
+      journal,
+      retryDelays: [10],
+      setTimer: () => ({}),
+      clearTimer: () => {},
+    })
+    return { q, store, removed, calls, tick: () => new Promise((r) => setTimeout(r, 0)) }
+  }
+
+  it('copies unsaved snapshots to the journal when a write fails, and removes them once persisted', async () => {
+    const h = withJournal()
+    h.q.enqueue({ id: 'a', v: 1 })
+    await h.tick()
+    h.calls[0].reject(new Error('quota'))
+    await h.tick()
+    expect(h.store.get('a')).toBe(1)
+    expect(h.q.snapshot().journalOk).toBe(true)
+    h.q.enqueue({ id: 'a', v: 2 }) // edit while failing: journal updated immediately
+    expect(h.store.get('a')).toBe(2)
+    const f = h.q.flush()
+    await h.tick()
+    h.calls[1].resolve()
+    expect((await f).ok).toBe(true)
+    expect(h.store.has('a')).toBe(false)
+    expect(h.q.snapshot().journalOk).toBeNull()
+  })
+
+  it('does not journal on healthy saves, but journalPending() copies in-flight work on demand', async () => {
+    const h = withJournal()
+    h.q.enqueue({ id: 'a', v: 1 })
+    expect(h.store.size).toBe(0)
+    expect(h.q.journalPending()).toBe(true) // e.g. tab hidden while the write is running
+    expect(h.store.get('a')).toBe(1)
+    await h.tick()
+    h.calls[0].resolve()
+    await h.tick()
+    expect(h.store.size).toBe(0)
+  })
+
+  it('reports when the journal itself cannot store a copy', async () => {
+    const h = withJournal(true)
+    h.q.enqueue({ id: 'a', v: 1 })
+    await h.tick()
+    h.calls[0].reject(new Error('quota'))
+    await h.tick()
+    expect(h.q.snapshot().journalOk).toBe(false)
+    expect(h.q.isPending('a')).toBe(true) // still kept in memory
+  })
+
+  it('hold() queues a restored snapshot as "unsaved" without writing', () => {
+    const h = withJournal()
+    h.q.hold({ id: 'a', v: 7 })
+    expect(h.q.snapshot()).toMatchObject({ status: 'unsaved', unsaved: 1 })
+    expect(h.calls).toHaveLength(0)
+  })
+})
+
+describe('tab lifecycle — recovery copies', () => {
+  it('takes a journal copy before flushing when hidden, on pagehide and on beforeunload', () => {
+    const win = new EventTarget()
+    const doc = Object.assign(new EventTarget(), { visibilityState: 'hidden' })
+    const order: string[] = []
+    const queue = {
+      flush: vi.fn(async () => void order.push('flush')),
+      hasUnsaved: () => true,
+      journalPending: vi.fn(() => void order.push('journal')),
+    }
+    registerLifecycle(queue, win, doc)
+    doc.dispatchEvent(new Event('visibilitychange'))
+    win.dispatchEvent(new Event('pagehide'))
+    win.dispatchEvent(new Event('beforeunload', { cancelable: true }))
+    expect(order).toEqual(['journal', 'flush', 'journal', 'flush', 'journal'])
+  })
+})

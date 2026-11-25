@@ -10,10 +10,12 @@ import { Logo } from './Logo'
 
 function SaveIndicator() {
   const state = useProjects((s) => s.saveState)
+  const unsaved = useProjects((s) => s.save.unsaved)
   const { t } = useT()
   if (state === 'idle') return null
   const map = {
-    saving: { icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, text: t('save.saving'), cls: 'text-navy-100' },
+    saving: { icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, text: unsaved > 0 ? `${t('save.saving')} · ${t('save.pendingCount', { n: unsaved })}` : t('save.saving'), cls: 'text-navy-100' },
+    unsaved: { icon: <AlertCircle className="h-3.5 w-3.5" />, text: `${t('save.unsaved')} (${unsaved})`, cls: 'text-gold-400' },
     saved: { icon: <CheckCircle2 className="h-3.5 w-3.5" />, text: t('save.saved'), cls: 'text-teal-400' },
     retrying: { icon: <RefreshCw className="h-3.5 w-3.5" />, text: t('save.retrying'), cls: 'text-gold-400' },
     failed: { icon: <AlertCircle className="h-3.5 w-3.5" />, text: t('save.failed'), cls: 'text-red-300' },
@@ -21,7 +23,9 @@ function SaveIndicator() {
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs ${map.cls}`} data-testid="save-state" data-state={state} aria-live="polite">
       {map.icon}
-      <span className={state === 'saving' || state === 'saved' ? 'hidden md:inline' : ''}>{map.text}</span>
+      <span className={state === 'saving' || state === 'saved' ? 'hidden md:inline' : ''} data-testid="save-label">
+        {map.text}
+      </span>
     </span>
   )
 }
@@ -48,7 +52,9 @@ function SaveProblemBanner() {
         <div className="min-w-0 flex-1">
           <p className="font-semibold">{t('save.bannerTitle', { n: save.unsaved })}</p>
           <p className="text-xs">
-            {save.status === 'retrying' && secs !== null ? t('save.bannerRetrying', { s: secs }) : t('save.bannerFailed')} {t('save.bannerKeep')}
+            {save.status === 'retrying' && secs !== null ? t('save.bannerRetrying', { s: secs }) : t('save.bannerFailed')} {t('save.bannerKeep')}{' '}
+            {save.journalOk === true && <span data-testid="journal-ok">{t('save.journalOk')}</span>}
+            {save.journalOk === false && <strong data-testid="journal-failed">{t('save.journalFailed')}</strong>}
             {save.lastError && <span className="ms-1 opacity-70" dir="ltr" lang="en">({save.lastError})</span>}
           </p>
         </div>
@@ -90,6 +96,29 @@ function useOnline() {
     }
   }, [])
   return online
+}
+
+function RecoveredNotice() {
+  const recovered = useProjects((s) => s.recovered)
+  const dismiss = useProjects((s) => s.dismissRecovered)
+  const { t } = useT()
+  if (recovered.length === 0) return null
+  return (
+    <div role="status" className="no-print border-b border-gold-400/50 bg-gold-100/70 text-navy-900" data-testid="recovered-notice">
+      <div className="mx-auto flex max-w-[1440px] items-start gap-3 px-4 py-2.5 text-sm sm:px-6">
+        <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-gold-600" />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">{t('save.recoveredTitle')}</p>
+          <p className="text-xs" dir="auto">
+            {t('save.recoveredBody', { list: recovered.map((r) => `“${r.title || '—'}”`).join(', ') })}
+          </p>
+        </div>
+        <button className="btn-ghost py-1 text-xs" onClick={dismiss}>
+          {t('common.close')}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function LoadErrorNotice() {
@@ -185,6 +214,7 @@ export function Layout({ loaded }: { loaded: boolean }) {
         {!online && <div className="bg-gold-500/90 px-4 py-1 text-center text-xs text-navy-950">{t('app.offline')}</div>}
       </header>
       <SaveProblemBanner />
+      <RecoveredNotice />
       <LoadErrorNotice />
       <main id="main" className="flex-1">
         {loaded ? (
