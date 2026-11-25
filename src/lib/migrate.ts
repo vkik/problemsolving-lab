@@ -139,6 +139,8 @@ export function sanitizeProject(input: unknown): Project {
   p.structure.meceStatus = oneOf(s.meceStatus, ['not-reviewed', 'needs-improvement', 'accepted'] as const, 'not-reviewed')
   p.structure.meceReviewedAt = typeof s.meceReviewedAt === 'string' ? isoStr(s.meceReviewedAt, '') || null : null
   p.structure.meceSignature = str(s.meceSignature)
+  const rv = isObj(s.review) ? s.review : {}
+  p.structure.review = { overlaps: str(rv.overlaps), missing: str(rv.missing), corrections: str(rv.corrections), reviewer: str(rv.reviewer), comments: str(rv.comments) }
   const h = isObj(s.hypothesis) ? s.hypothesis : {}
   p.structure.hypothesis = { initial: str(h.initial), rationale: str(h.rationale), alternatives: str(h.alternatives), unknowns: str(h.unknowns) }
 
@@ -213,7 +215,7 @@ export function sanitizeProject(input: unknown): Project {
   p.synthesis.findings = arr(sy.findings).filter(isObj).map((f) => {
     const fd = newFinding()
     fd.id = idStr(f.id, 'fnd')
-    for (const k of ['discovery', 'insight', 'implication', 'meaning', 'whyMatters', 'uncertain'] as const) fd[k] = str(f[k])
+    for (const k of ['discovery', 'insight', 'implication', 'meaning', 'whyMatters', 'uncertain', 'decision', 'priorBelief'] as const) fd[k] = str(f[k])
     fd.analysisIds = strArr(f.analysisIds).filter((id) => analysisIds.has(id))
     fd.evidenceIds = strArr(f.evidenceIds).filter((id) => evidenceIds.has(id))
     return fd
@@ -257,7 +259,8 @@ export function sanitizeProject(input: unknown): Project {
  * - v0 (unversioned) → v1: same shape.
  * - v1 → v2: issue nodes gain `kind` (unclassified); recommendations gain `precautionary` (false)
  *   and `precautionaryJustification`; the structure review gains two questions (`causes`,
- *   `treeType`) as unanswered. A review accepted under v1 stays accepted — the UI asks the user to
+ *   `treeType`) as unanswered, plus empty review notes; findings gain empty `decision` and
+ *   `priorBelief`. A review accepted under v1 stays accepted — the UI asks the user to
  *   answer the two new questions at the next review, and the step reports it as a documented limitation.
  */
 function migrate(raw: Obj, fromVersion: number): Obj {

@@ -78,6 +78,7 @@ export function emptyProject(partial: Partial<Project> = {}): Project {
       meceStatus: 'not-reviewed',
       meceReviewedAt: null,
       meceSignature: '',
+      review: { overlaps: '', missing: '', corrections: '', reviewer: '', comments: '' },
       hypothesis: { initial: '', rationale: '', alternatives: '', unknowns: '' },
     },
     prioritize: { assessments: {}, ranking: [], selected: [] },
@@ -157,6 +158,8 @@ export function newFinding(): Finding {
     meaning: '',
     whyMatters: '',
     uncertain: '',
+    decision: '',
+    priorBelief: '',
     analysisIds: [],
     evidenceIds: [],
   }

@@ -4,7 +4,7 @@ import { useT, type TFn } from '../i18n'
 import { newFinding } from '../lib/factory'
 import { deleteFinding, rankedFindings } from '../lib/integrity'
 import { allEvidence } from '../lib/progress'
-import { findingSupport, type FindingSupport } from '../lib/evidence'
+import { findingSupport, type FindingClass, type FindingSupport } from '../lib/evidence'
 import { similarity } from '../lib/structureChecks'
 import type { Finding, Project } from '../lib/types'
 import type { StepProps } from '../pages/StepPage'
@@ -29,27 +29,63 @@ export function findingWarnings(f: Finding): string[] {
   return w
 }
 
-const SUPPORT_STYLE = {
-  validated: 'bg-teal-600 text-white',
-  provisional: 'bg-gold-100 text-gold-600',
-  unlinked: 'bg-red-50 text-red-700',
+export const SUPPORT_STYLE: Record<FindingClass, string> = {
+  verified: 'bg-teal-600 text-white',
+  partial: 'bg-teal-100 text-teal-800',
+  preliminary: 'bg-gold-100 text-gold-600',
+  inconclusive: 'bg-amber-100 text-amber-900',
+  unsupported: 'bg-red-50 text-red-700',
 }
 
-/** Shows how well a finding is supported. Shared by synthesis, recommendations and the report. */
+/** Shows how well a finding is supported — always with the reason. Shared by synthesis, recommendations and the report. */
 export function SupportBadge({ support, t }: { support: FindingSupport; t: TFn }) {
+  const flagged = support.cls !== 'verified'
   return (
-    <span className="inline-flex flex-wrap items-center gap-1" data-testid="support-badge" data-level={support.level}>
-      <span className={`badge ${SUPPORT_STYLE[support.level]}`}>{t(`sup.${support.level}`)}</span>
-      {support.level === 'provisional' && (
-        <span className={`text-[11px] ${support.documented ? 'text-navy-700' : 'font-semibold text-amber-800'}`}>
-          {support.documented ? t('sup.documented') : t('sup.undocumented')} · {support.reasons.map((r) => t(`sup.r.${r}`)).join('; ')}
+    <span className="inline-flex flex-wrap items-center gap-1" data-testid="support-badge" data-level={support.cls} title={t(`sup.d.${support.cls}`)}>
+      <span className={`badge ${SUPPORT_STYLE[support.cls]}`}>{t(`sup.${support.cls}`)}</span>
+      {flagged && (
+        <span className={`text-[11px] ${support.documented || support.cls === 'unsupported' ? 'text-navy-700' : 'font-semibold text-amber-800'}`}>
+          {support.cls !== 'unsupported' && <>{support.documented ? t('sup.documented') : t('sup.undocumented')} · </>}
+          {t('sup.why')} {support.reasons.map((r) => t(`sup.r.${r}`)).join('; ')}
         </span>
       )}
     </span>
   )
 }
 
-const LEVELS = [1, 2, 3, 4, 5] as const
+/** Contextual evidence-quality checks for one finding (analytical validation). */
+export function EvidenceQuality({ support, t }: { support: FindingSupport; t: TFn }) {
+  const names = (list: { title: string; hypothesis: string }[]) => list.map((a) => a.title || a.hypothesis || '…').join('; ')
+  return (
+    <div className="rounded-lg border border-navy-100 bg-navy-50/60 p-3" data-testid="evidence-quality">
+      <p className="mb-0.5 flex items-center gap-2 text-xs font-semibold text-navy-900">
+        <span className="badge bg-navy-900 text-white">{t('val.kind')}</span>
+        {t('val.title')}
+      </p>
+      <p className="mb-2 text-[11px] text-navy-700">{t('val.intro')}</p>
+      {support.evidence.length === 0 ? (
+        <p className="text-xs text-navy-700">{t('val.noEvidence')}</p>
+      ) : (
+        <ul className="grid gap-1 text-xs sm:grid-cols-2">
+          {support.quality.map((q) => (
+            <li key={q.key} className={q.low > 0 ? 'font-semibold text-amber-900' : 'text-navy-800'} data-testid={`quality-${q.key}`}>
+              {t(`an.q.${q.key}`)}: {t('val.counts', { high: q.high, medium: q.medium, low: q.low, unrated: q.unrated })}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs font-semibold text-navy-900">{t('val.limitations')}</p>
+      <p className="text-xs text-navy-800" dir="auto">
+        {support.limitationsDocumented.length === 0 && support.limitationsMissing.length === 0 && t('val.limitationsNone')}
+        {support.limitationsDocumented.length > 0 && t('val.limitationsOk', { list: names(support.limitationsDocumented) })}
+        {support.limitationsMissing.length > 0 && <span className="ms-1 font-semibold text-amber-900">{t('val.limitationsMissing', { list: names(support.limitationsMissing) })}</span>}
+      </p>
+    </div>
+  )
+}
+
+const LEVELS = [1, 2, 3, 4, 5, 6] as const
+const QUESTIONS = [1, 2, 3, 4, 5, 6, 7] as const
 
 /** The five rungs from data to decision, with an illustrative example. */
 export function SynthesisLadder() {
@@ -66,7 +102,7 @@ export function SynthesisLadder() {
           {example ? t('ladder.hideExample') : t('ladder.example')}
         </button>
       </div>
-      <ol className="grid gap-2 md:grid-cols-5">
+      <ol className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {LEVELS.map((n) => (
           <li key={n} className={`rounded-lg border p-3 ${n >= 3 ? 'border-gold-400/60 bg-gold-100/30' : 'border-navy-100 bg-navy-50/60'}`}>
             <p className="text-xs font-bold text-teal-700">
@@ -86,6 +122,18 @@ export function SynthesisLadder() {
           {t('ladder.exSentence')} <span className="text-xs text-navy-700">({t('ladder.exNote')})</span>
         </div>
       )}
+      <details className="mt-3 rounded-lg border border-navy-100 bg-white" data-testid="synthesis-worksheet">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-navy-900">{t('ladder.worksheet')}</summary>
+        <div className="border-t border-navy-100 px-3 py-2 text-sm text-navy-800">
+          <ol className="list-decimal space-y-1 ps-5">
+            {QUESTIONS.map((n) => (
+              <li key={n}>{t(`ladder.q${n}`)}</li>
+            ))}
+          </ol>
+          <p className="mt-2 text-xs text-navy-700">{t('ladder.becauseAid')}</p>
+          <p className="mt-1 text-xs text-navy-700">{t('ladder.noAuto')}</p>
+        </div>
+      </details>
     </section>
   )
 }
@@ -114,13 +162,17 @@ function FindingCard({ f, index, project, update }: StepProps & { f: Finding; in
     if (ok) update((p) => deleteFinding(p, f.id))
   }
   const draft = async () => {
-    const text = [f.meaning.trim().replace(/[.。؛;]+$/u, ''), f.implication.trim()].filter(Boolean).join(t('syn.joiner'))
-    if (!text) return
+    const insight = f.meaning.trim().replace(/[.。؛;]+$/u, '')
+    const implication = f.implication.trim().replace(/[.。؛;]+$/u, '')
+    if (!insight || !implication) return
+    // Lower-case a leading capital only when the next letter is lower-case ("The test…" → "the test…").
+    const soften = (x: string) => (/^[A-Z][a-z]/.test(x) ? x[0].toLowerCase() + x.slice(1) : x)
+    const text = t('syn.becauseTpl', { insight: soften(insight), implication: soften(implication) })
     if (f.insight.trim()) {
       const ok = await confirmDialog({ title: t('syn.draftSentence'), body: t('statement.replaceConfirm') })
       if (!ok) return
     }
-    set({ insight: text.endsWith('.') || text.endsWith('؟') ? text : `${text}.` })
+    set({ insight: text })
   }
   const linkedResults = support.analyses.filter((a) => a.results.trim())
   return (
@@ -177,12 +229,16 @@ function FindingCard({ f, index, project, update }: StepProps & { f: Finding; in
               </ul>
             </div>
           )}
+          <div className="mt-3">
+            <EvidenceQuality support={support} t={t} />
+          </div>
         </Rung>
         <Rung n={2} title={t('ladder.l2')} prompt={t('syn.l2.prompt')}>
           <TextField label={t('syn.discovery')} value={f.discovery} onChange={(v) => set({ discovery: v })} multiline testId="finding-discovery" />
         </Rung>
         <Rung n={3} title={t('ladder.l3')} prompt={t('syn.l3.prompt')}>
           <TextField label={t('syn.meaning')} value={f.meaning} onChange={(v) => set({ meaning: v })} multiline testId="finding-meaning" />
+          <TextField className="mt-3" label={t('val.priorBelief')} value={f.priorBelief} onChange={(v) => set({ priorBelief: v })} multiline testId="finding-prior" />
         </Rung>
         <Rung n={4} title={t('ladder.l4')} prompt={t('syn.l4.prompt')}>
           <TextField label={t('syn.implication')} value={f.implication} onChange={(v) => set({ implication: v })} multiline testId="finding-implication" />
@@ -190,13 +246,16 @@ function FindingCard({ f, index, project, update }: StepProps & { f: Finding; in
         <Rung n={5} title={t('ladder.l5')} prompt={t('syn.l5.prompt')}>
           <TextField label={t('syn.whyMatters')} value={f.whyMatters} onChange={(v) => set({ whyMatters: v })} multiline testId="finding-whymatters" />
         </Rung>
+        <Rung n={6} title={t('ladder.l6')} prompt={t('syn.l6.prompt')}>
+          <TextField label={t('syn.decision')} value={f.decision} onChange={(v) => set({ decision: v })} multiline testId="finding-decision" />
+        </Rung>
         <div className="border-t border-navy-100 pt-4">
           <TextField label={t('syn.uncertain')} value={f.uncertain} onChange={(v) => set({ uncertain: v })} multiline testId="finding-uncertain" />
         </div>
         <div className="rounded-lg border-s-4 border-gold-500 bg-gold-100/40 p-3">
           <TextField label={t('syn.insight')} value={f.insight} onChange={(v) => set({ insight: v })} placeholder={t('syn.insightPh')} multiline testId="finding-insight" />
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button className="btn-secondary py-1" onClick={draft} disabled={!f.meaning.trim() && !f.implication.trim()} data-testid="draft-sentence">
+            <button className="btn-secondary max-w-full whitespace-normal py-1 text-start" onClick={draft} disabled={!f.meaning.trim() || !f.implication.trim()} data-testid="draft-sentence">
               <Wand2 className="h-4 w-4" />
               {t('syn.draftSentence')}
             </button>

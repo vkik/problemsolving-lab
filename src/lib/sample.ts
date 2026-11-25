@@ -86,6 +86,13 @@ export function buildSampleProject(): Project {
     causes: { answer: 'yes', note: 'All branches are possible causes. The low yield itself (the symptom) is in the problem statement; unmet demand (a consequence) is under “why it matters”.' },
     treeType: { answer: 'yes', note: 'An issue tree: the sub-issues are written as questions to investigate.' },
   }
+  p.structure.review = {
+    overlaps: 'None found after re-reading each pair of branches. “Development” (3.1) and “screen position” (2.1) were checked: one is a construction activity, the other a design decision.',
+    missing: 'Considered “energy supply to the test pump” — placed under 4.2 (measuring and test equipment) rather than as a new branch.',
+    corrections: 'Moved “unmet community demand” out of the tree: it is a consequence and belongs under “why it matters”.',
+    reviewer: 'Hydrogeologist (illustrative)',
+    comments: 'Illustrative review record. Re-review if the retest changes the picture.',
+  }
   p.structure.meceStatus = 'accepted'
   p.structure.meceReviewedAt = new Date().toISOString()
   p.structure.meceSignature = treeSignature(d.question, p.structure.nodes)
@@ -227,11 +234,13 @@ export function buildSampleProject(): Project {
   /* ---- Step 6: Synthesis ---- */
   const f1 = Object.assign(newFinding(), {
     discovery: 'The pumping test did not fully follow the specification (recovery under-measured, interruptions recorded).',
-    insight: 'Because the pumping test was incomplete, the shortfall cannot yet be attributed to the aquifer, so a properly supervised retest is needed before any decision to abandon or redesign the well.',
+    insight: 'Because the pumping test was incomplete, the shortfall cannot yet be attributed to the aquifer — a properly supervised retest is needed before any decision to abandon or redesign the well.',
     implication: 'Do not abandon or redesign the well until a valid test is available.',
     meaning: 'The current yield figure is indicative only.',
     whyMatters: 'Abandoning a potentially good well, or redesigning on the basis of a flawed test, would waste funds.',
     uncertain: 'Whether a valid test would show a different yield.',
+    decision: 'Postpone any decision to abandon or redesign; commission a supervised retest first.',
+    priorBelief: 'The team initially assumed the aquifer was the cause because the yield was low.',
     analysisIds: [a1.id],
     evidenceIds: [e1.id, e2.id],
   })
@@ -242,6 +251,8 @@ export function buildSampleProject(): Project {
     meaning: 'One plausible, fixable cause has been identified but not confirmed.',
     whyMatters: 'If confirmed, the problem may be solvable without a new borehole.',
     uncertain: 'Screen condition is unknown; the effect of short development on yield is still an assumption.',
+    decision: 'Add a camera inspection and re-development before the retest — a cheap step that could change the whole decision.',
+    priorBelief: 'Development was assumed to have followed the specification.',
     analysisIds: [a2.id],
     evidenceIds: [e3.id, e4.id],
   })

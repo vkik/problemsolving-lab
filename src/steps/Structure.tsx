@@ -17,6 +17,8 @@ export const MECE_GOOD: Record<MeceQuestionKey, MeceAnswer> = { contributes: 'ye
 const KIND_STYLE: Record<NodeKind, string> = {
   '': 'border-navy-100 bg-white text-navy-700/70',
   driver: 'border-teal-100 bg-teal-50 text-teal-700',
+  'root-cause': 'border-teal-500 bg-teal-100 text-teal-800',
+  contributing: 'border-navy-100 bg-navy-50 text-navy-800',
   symptom: 'border-amber-200 bg-amber-50 text-amber-900',
   consequence: 'border-purple-100 bg-purple-50 text-purple-800',
 }
@@ -202,9 +204,13 @@ function MeceReview({ project, update }: StepProps) {
 
   return (
     <section className="card card-pad" data-testid="mece">
+      <p className="mb-1">
+        <span className="badge bg-navy-900 text-white">{t('mece.reviewKind')}</span>
+      </p>
       <h2 className="section-title mb-1">{t('mece.title')}</h2>
       <p className="mb-1 text-sm text-navy-700">{t('mece.intro')}</p>
-      <p className="mb-4 text-xs text-navy-700/80">{t('mece.hintsNote')}</p>
+      <p className="mb-1 text-xs text-navy-700/80">{t('mece.hintsNote')}</p>
+      <p className="mb-4 text-xs font-medium text-navy-800">{t('mece.noAuto')}</p>
       {newQuestionsPending && (
         <div className="mb-4">
           <Notice testId="mece-new-questions">{t('mece.newQuestions')}</Notice>
@@ -299,6 +305,17 @@ function MeceReview({ project, update }: StepProps) {
           </div>
         )}
       </div>
+      <div className="mt-5 border-t border-navy-100 pt-4" data-testid="review-record">
+        <p className="section-title">{t('mece.notes')}</p>
+        <p className="mb-3 text-xs text-navy-700">{t('mece.notesIntro')}</p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {(['overlaps', 'missing', 'corrections'] as const).map((k) => (
+            <TextField key={k} label={t(`mece.n.${k}`)} value={s.review[k]} onChange={(v) => update((p) => void (p.structure.review[k] = v))} multiline testId={`review-${k}`} />
+          ))}
+          <TextField label={t('mece.n.reviewer')} value={s.review.reviewer} onChange={(v) => update((p) => void (p.structure.review.reviewer = v))} testId="review-reviewer" />
+          <TextField className="md:col-span-2" label={t('mece.n.comments')} value={s.review.comments} onChange={(v) => update((p) => void (p.structure.review.comments = v))} multiline testId="review-comments" />
+        </div>
+      </div>
     </section>
   )
 }
@@ -338,6 +355,19 @@ export function StructureStep({ project, update }: StepProps) {
             </button>
           ))}
         </div>
+        <details className="mt-3 rounded-lg border border-navy-100" data-testid="tree-compare">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-navy-900">{t('tree.compare')}</summary>
+          <div className="grid gap-3 border-t border-navy-100 p-3 text-sm md:grid-cols-2">
+            {(['issue', 'hyp'] as const).map((k) => (
+              <div key={k} className="rounded-md bg-navy-50 p-3">
+                <p className="font-semibold text-navy-900">{t(k === 'issue' ? 'structure.type.issue' : 'structure.type.hypothesis')}</p>
+                <p className="mt-1 text-navy-800">{t(`tree.${k}What`)}</p>
+                <p className="mt-1 text-xs text-navy-700">{t(`tree.${k}When`)}</p>
+                <p className="mt-2 text-xs italic text-navy-800">{t(`tree.${k}Ex`)}</p>
+              </div>
+            ))}
+          </div>
+        </details>
         <TextField
           className="mt-5"
           label={s.treeType === 'issue' ? t('structure.root') : t('structure.rootHypothesis')}

@@ -9,7 +9,8 @@
  * Bump SCHEMA_VERSION and add a migration in migrate.ts whenever this shape changes.
  *
  * v2 (ProblemSolving Lab 1.1): IssueNode.kind; Recommendation.precautionary and
- * precautionaryJustification; two extra structure-review questions (causes, treeType).
+ * precautionaryJustification; two extra structure-review questions (causes, treeType);
+ * StructureStep.review notes; Finding.decision and Finding.priorBelief.
  */
 
 export const SCHEMA_VERSION = 2
@@ -69,8 +70,8 @@ export interface DefineStep {
 export type TreeType = 'issue' | 'hypothesis'
 
 /** How a branch relates to the problem. Symptoms and consequences should not sit where causes belong. */
-export type NodeKind = '' | 'driver' | 'symptom' | 'consequence'
-export const NODE_KINDS: NodeKind[] = ['', 'driver', 'symptom', 'consequence']
+export type NodeKind = '' | 'driver' | 'root-cause' | 'contributing' | 'symptom' | 'consequence'
+export const NODE_KINDS: NodeKind[] = ['', 'driver', 'root-cause', 'contributing', 'symptom', 'consequence']
 
 export interface IssueNode {
   id: string
@@ -103,12 +104,22 @@ export interface StructureStep {
   meceReviewedAt: string | null
   /** Snapshot of the tree when the review was accepted, to detect later changes. */
   meceSignature: string
+  /** Documented human review: what the reviewer found and decided. */
+  review: StructureReview
   hypothesis: {
     initial: string
     rationale: string
     alternatives: string
     unknowns: string
   }
+}
+
+export interface StructureReview {
+  overlaps: string
+  missing: string
+  corrections: string
+  reviewer: string
+  comments: string
 }
 
 /* ---------- Step 3: Prioritize ---------- */
@@ -208,6 +219,10 @@ export interface Finding {
   meaning: string
   whyMatters: string
   uncertain: string
+  /** Decision relevance: what action, priority or decision could change because of this insight. */
+  decision: string
+  /** What we initially believed that the evidence changed. */
+  priorBelief: string
   analysisIds: string[]
   evidenceIds: string[]
 }

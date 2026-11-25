@@ -97,6 +97,7 @@ export function stepCriteria(p: Project, step: StepKey): Criterion[] {
       const sw = p.synthesis.soWhat
       return [
         { key: 'synthesis.findings', met: f.length > 0 && f.every((x) => filled(x.insight) && filled(x.implication)) },
+        { key: 'synthesis.statementInterpretation', met: f.length > 0 && f.every((x) => filled(x.discovery) && filled(x.meaning)) },
         { key: 'synthesis.linked', met: f.length > 0 && f.every((x) => x.evidenceIds.length > 0 || x.analysisIds.length > 0) },
         { key: 'synthesis.soWhat', met: [sw.mostImportant, sw.whyMatters, sw.decision, sw.doNothing].every(filled) },
       ]
@@ -153,8 +154,13 @@ export function stepIssues(p: Project, step: StepKey): QualityIssue[] {
     case 'synthesis':
       for (const f of p.synthesis.findings) {
         const s = findingSupport(p, f)
-        if (s.level !== 'provisional') continue
-        out.push({ key: s.documented ? 'synthesis.provisionalDocumented' : 'synthesis.provisional', level: s.documented ? 'limitation' : 'needs-evidence', item: label(f.insight || f.discovery) })
+        const name = label(f.insight || f.discovery)
+        if (s.cls === 'verified') continue
+        if (s.cls === 'unsupported') {
+          if (s.reasons.includes('noBasis')) out.push({ key: 'synthesis.unsupported', level: 'needs-evidence', item: name })
+          continue // no links at all is a failed criterion (synthesis.linked)
+        }
+        out.push({ key: s.documented ? `synthesis.${s.cls}Documented` : `synthesis.${s.cls}`, level: s.documented ? 'limitation' : 'needs-evidence', item: name })
       }
       break
     case 'recommendations':
@@ -162,7 +168,7 @@ export function stepIssues(p: Project, step: StepKey): QualityIssue[] {
         const c = recommendationChain(p, r)
         const name = label(r.title || r.action)
         if (c.level === 'unsupported') out.push({ key: c.reason === 'brokenChain' ? 'recommendations.brokenChain' : 'recommendations.unsupported', level: 'needs-evidence', item: name })
-        else if (c.level === 'limited') out.push({ key: 'recommendations.limited', level: 'limitation', item: name })
+        else if (c.level === 'partial') out.push({ key: 'recommendations.partial', level: 'limitation', item: name })
         else if (c.level === 'precautionary') out.push({ key: 'recommendations.precautionary', level: 'limitation', item: name })
       }
       break

@@ -7,7 +7,8 @@ import type { StepProps } from '../pages/StepPage'
 import { Checkbox, confirmDialog, Empty, LinkPicker, Notice, Segmented, SelectField, TextField } from '../components/ui'
 import { EVIDENCE_STYLE, RESULT_STYLE } from './Analyses'
 import { SupportBadge } from './Synthesis'
-import { recommendationChain } from '../lib/evidence'
+import { recommendationChain, type ChainLevel } from '../lib/evidence'
+import { labelMap } from '../lib/tree'
 
 const DISP_TONE: Record<Disposition, string> = {
   recommended: 'bg-teal-600 text-white',
@@ -15,15 +16,16 @@ const DISP_TONE: Record<Disposition, string> = {
   rejected: 'bg-red-600 text-white',
 }
 
-const CHAIN_STYLE = {
+const CHAIN_STYLE: Record<ChainLevel, string> = {
   backed: 'bg-teal-600 text-white',
-  limited: 'bg-gold-100 text-gold-600',
+  partial: 'bg-teal-100 text-teal-800',
   precautionary: 'bg-purple-50 text-purple-800',
+  investigate: 'bg-gold-100 text-gold-600',
   unsupported: 'bg-red-600 text-white',
   na: 'bg-navy-50 text-navy-700',
 }
 
-/** Evidence status of a recommendation. Never shows "evidence-backed" when the chain is broken. */
+/** Evidence status of a recommendation, always with its reason. Never "evidence-backed" when the chain is broken. */
 export function ChainBadge({ rec, project, t }: { rec: Recommendation; project: Project; t: TFn }) {
   const c = recommendationChain(project, rec)
   if (c.level === 'na') return null
@@ -35,40 +37,73 @@ export function ChainBadge({ rec, project, t }: { rec: Recommendation; project: 
   )
 }
 
-/** Recommendation → finding → analysis → evidence. */
+/** Recommendation → issues → finding → analysis → evidence, plus the limitations that bear on it. */
 export function Traceability({ rec, project }: { rec: Recommendation; project: Project }) {
   const { t } = useT()
   const chain = recommendationChain(project, rec)
-  if (chain.findings.length === 0)
-    return <p className="text-xs text-amber-800">{rec.precautionary && rec.precautionaryJustification.trim() ? t('chain.precautionary') : t('rec.traceNone')}</p>
+  const labels = labelMap(project.structure.nodes)
   return (
-    <ul className="space-y-3" data-testid="traceability">
-      {chain.findings.map(({ finding: f, support }) => (
-        <li key={f.id} className="text-xs">
-          <p className="font-medium text-navy-900" dir="auto">
-            → {f.insight || f.discovery || '…'}
-          </p>
-          <div className="mt-1 ps-4">
-            <SupportBadge support={support} t={t} />
-          </div>
-          <ul className="mt-1 space-y-1 ps-4">
-            {support.analyses.map((a) => (
-              <li key={a.id} className="flex items-start gap-1.5 text-navy-700">
-                <span className={`badge shrink-0 py-0 text-[10px] ${RESULT_STYLE[a.result]}`}>{t(`an.r.${a.result}`)}</span>
-                <span dir="auto">{a.title || a.hypothesis || '…'}</span>
+    <div className="space-y-3" data-testid="traceability">
+      <div>
+        <p className="text-[11px] font-semibold text-navy-900">{t('rec.issuesAddressed')}</p>
+        {chain.issueIds.length === 0 ? (
+          <p className="text-xs text-navy-700">{t('rec.noIssues')}</p>
+        ) : (
+          <ul className="text-xs text-navy-800" data-testid="trace-issues">
+            {chain.issueIds.map((id) => (
+              <li key={id} dir="auto">
+                <span className="me-1 font-semibold text-teal-700">{labels.get(id)}</span>
+                {project.structure.nodes.find((n) => n.id === id)?.text}
               </li>
             ))}
-            {support.evidence.map(({ evidence: e }) => (
-              <li key={e.id} className="flex items-start gap-1.5 text-navy-700">
-                <span className={`badge shrink-0 py-0 text-[10px] ${EVIDENCE_STYLE[e.type]}`}>{t(`an.et.${e.type}`)}</span>
-                <span dir="auto">{e.description || '…'}</span>
-              </li>
-            ))}
-            {support.level === 'unlinked' && <li className="font-semibold text-red-700">{t('chain.r.brokenChain')}</li>}
           </ul>
-        </li>
-      ))}
-    </ul>
+        )}
+      </div>
+      {chain.findings.length === 0 ? (
+        <p className="text-xs text-amber-800">{rec.precautionary && rec.precautionaryJustification.trim() ? t('chain.r.precaution') : t('rec.traceNone')}</p>
+      ) : (
+        <ul className="space-y-3">
+          {chain.findings.map(({ finding: f, support }) => (
+            <li key={f.id} className="text-xs">
+              <p className="font-medium text-navy-900" dir="auto">
+                → {f.insight || f.discovery || '…'}
+              </p>
+              <div className="mt-1 ps-4">
+                <SupportBadge support={support} t={t} />
+              </div>
+              <ul className="mt-1 space-y-1 ps-4">
+                {support.analyses.map((a) => (
+                  <li key={a.id} className="flex items-start gap-1.5 text-navy-700">
+                    <span className={`badge shrink-0 py-0 text-[10px] ${RESULT_STYLE[a.result]}`}>{t(`an.r.${a.result}`)}</span>
+                    <span dir="auto">{a.title || a.hypothesis || '…'}</span>
+                  </li>
+                ))}
+                {support.evidence.map(({ evidence: e }) => (
+                  <li key={e.id} className="flex items-start gap-1.5 text-navy-700">
+                    <span className={`badge shrink-0 py-0 text-[10px] ${EVIDENCE_STYLE[e.type]}`}>{t(`an.et.${e.type}`)}</span>
+                    <span dir="auto">{e.description || '…'}</span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div>
+        <p className="text-[11px] font-semibold text-navy-900">{t('rec.limitationsAffecting')}</p>
+        {chain.limitations.length === 0 ? (
+          <p className="text-xs text-navy-700">{t('rec.noLimitations')}</p>
+        ) : (
+          <ul className="list-disc space-y-0.5 ps-4 text-xs text-navy-800" data-testid="trace-limitations">
+            {chain.limitations.map((l, i) => (
+              <li key={i} dir="auto">
+                {l.text} <span className="text-navy-700/70">— {l.label}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   )
 }
 

@@ -20,12 +20,13 @@ function solid(): { p: Project; aId: string; fId: string; eId: string } {
   a.result = 'supported'
   a.conclusion = 'c'
   a.limitations = 'l'
+  a.results = 'r'
   const e = ev({ type: 'fact', source: 'record', quality: { reliability: 'high', completeness: 'high', accuracy: 'high', recency: 'high', confidence: 'high' } })
   a.evidence = [e]
   a.issueId = p.structure.nodes[1].id
   p.analyses = [a]
   const f = newFinding()
-  Object.assign(f, { discovery: 'd', meaning: 'm', insight: 'An insight, so an implication.', implication: 'i', analysisIds: [a.id] })
+  Object.assign(f, { discovery: 'd', meaning: 'm', insight: 'Because an insight, an implication.', implication: 'i', analysisIds: [a.id] })
   p.synthesis.findings = [f]
   p.synthesis.ranking = [f.id]
   const r = newRecommendation()
@@ -34,65 +35,82 @@ function solid(): { p: Project; aId: string; fId: string; eId: string } {
   return { p, aId: a.id, fId: f.id, eId: e.id }
 }
 
-describe('finding support (evidence chain)', () => {
-  it('validated: tested analysis with a verified fact', () => {
+describe('finding classes (evidence chain)', () => {
+  it('verified: tested analysis with a verified fact and no reservations', () => {
     const { p } = solid()
     const s = findingSupport(p, p.synthesis.findings[0])
-    expect(s.level).toBe('validated')
+    expect(s.cls).toBe('verified')
     expect(s.evidence).toHaveLength(1) // evidence behind a linked analysis counts
     expect(evaluateStep(p, 'synthesis').status).toBe('complete')
   })
-  it('unlinked findings are incomplete, not validated', () => {
+  it('a linked analysis alone is not verification: no links → unsupported; analysis documenting nothing → unsupported', () => {
     const { p } = solid()
     p.synthesis.findings[0].analysisIds = []
-    expect(findingSupport(p, p.synthesis.findings[0]).level).toBe('unlinked')
+    expect(findingSupport(p, p.synthesis.findings[0])).toMatchObject({ cls: 'unsupported', reasons: ['noLinks'] })
     expect(evaluateStep(p, 'synthesis').status).toBe('incomplete')
+    const { p: q } = solid()
+    Object.assign(q.analyses[0], { evidence: [], results: '', conclusion: '' })
+    expect(findingSupport(q, q.synthesis.findings[0])).toMatchObject({ cls: 'unsupported', reasons: ['noBasis'] })
+    expect(evaluateStep(q, 'synthesis').status).toBe('needs-evidence')
   })
-  it.each([
-    ['untested', (p: Project) => void (p.analyses[0].result = 'not-tested')],
-    ['inconclusive', (p: Project) => void (p.analyses[0].result = 'inconclusive')],
-    ['noStrongEvidence', (p: Project) => void (p.analyses[0].evidence[0].type = 'assumption')],
-    ['qualityConcern', (p: Project) => void (p.analyses[0].evidence[0].quality.reliability = 'low')],
-  ])('provisional when %s — never silently validated', (reason, mutate) => {
+  it.each<[string, string, (p: Project) => void]>([
+    ['preliminary', 'untested', (p) => void (p.analyses[0].result = 'not-tested')],
+    ['inconclusive', 'inconclusive', (p) => void (p.analyses[0].result = 'inconclusive')],
+    ['partial', 'partialResult', (p) => void (p.analyses[0].result = 'partially-supported')],
+    ['preliminary', 'noStrongEvidence', (p) => void (p.analyses[0].evidence[0].type = 'assumption')],
+    ['preliminary', 'noEvidenceItems', (p) => void Object.assign(p.analyses[0], { evidence: [], results: 'documented results' })],
+    ['partial', 'lowReliability', (p) => void (p.analyses[0].evidence[0].quality.reliability = 'low')],
+    ['partial', 'lowCompleteness', (p) => void (p.analyses[0].evidence[0].quality.completeness = 'low')],
+    ['partial', 'lowRecency', (p) => void (p.analyses[0].evidence[0].quality.recency = 'low')],
+  ])('%s when %s — never silently verified; documented uncertainty is accepted', (cls, reason, mutate) => {
     const { p } = solid()
     mutate(p)
     const s = findingSupport(p, p.synthesis.findings[0])
-    expect(s.level).toBe('provisional')
+    expect(s.cls).toBe(cls)
     expect(s.reasons).toContain(reason)
-    // Without documented uncertainty → needs further evidence
     expect(evaluateStep(p, 'synthesis').status).toBe('needs-evidence')
-    // With documented uncertainty → accepted as a documented limitation (not rejected)
     p.synthesis.findings[0].uncertain = 'We have not yet verified this.'
     expect(evaluateStep(p, 'synthesis').status).toBe('complete-limited')
   })
-  it('keeps evidence classes distinct: interpretation does not count as strong evidence', () => {
+  it('keeps evidence classes distinct: interpretation is not strong evidence, external evidence is', () => {
     const { p } = solid()
     p.analyses[0].evidence[0].type = 'interpretation'
     expect(findingSupport(p, p.synthesis.findings[0]).reasons).toContain('noStrongEvidence')
     p.analyses[0].evidence[0].type = 'external'
-    expect(findingSupport(p, p.synthesis.findings[0]).level).toBe('validated')
+    expect(findingSupport(p, p.synthesis.findings[0]).cls).toBe('verified')
+  })
+  it('reports per-dimension quality counts and methodological limitations', () => {
+    const { p } = solid()
+    p.analyses[0].evidence.push(ev({ type: 'observation', quality: { reliability: 'low', completeness: '', accuracy: '', recency: '', confidence: '' } }))
+    const s = findingSupport(p, p.synthesis.findings[0])
+    expect(s.quality.find((q) => q.key === 'reliability')).toEqual({ key: 'reliability', low: 1, medium: 0, high: 1, unrated: 0 })
+    expect(s.quality.find((q) => q.key === 'recency')).toMatchObject({ high: 1, unrated: 1 })
+    expect(s.limitationsDocumented.map((a) => a.title)).toEqual(['A'])
+  })
+  it('requires a statement and an interpretation for every finding', () => {
+    const { p } = solid()
+    p.synthesis.findings[0].meaning = ''
+    expect(evaluateStep(p, 'synthesis').criteria.find((c) => c.key === 'synthesis.statementInterpretation')?.met).toBe(false)
   })
 })
 
-describe('recommendation chain', () => {
+describe('recommendation states', () => {
   it('evidence-backed only when every link holds', () => {
     const { p } = solid()
-    expect(recommendationChain(p, p.recommendations[0]).level).toBe('backed')
+    expect(recommendationChain(p, p.recommendations[0])).toMatchObject({ level: 'backed', reason: 'allVerified' })
     expect(evaluateStep(p, 'recommendations').status).toBe('complete')
   })
-  it('backed with limitations when the finding is provisional', () => {
+  it('partially supported when a finding is not verified — with the reason', () => {
     const { p } = solid()
     p.analyses[0].result = 'inconclusive'
     p.synthesis.findings[0].uncertain = 'u'
-    expect(recommendationChain(p, p.recommendations[0]).level).toBe('limited')
+    expect(recommendationChain(p, p.recommendations[0])).toMatchObject({ level: 'partial', reason: 'findingsNotVerified' })
     expect(evaluateStep(p, 'recommendations').status).toBe('complete-limited')
   })
   it('a broken chain is unsupported, never evidence-backed', () => {
     const { p } = solid()
-    p.synthesis.findings[0].analysisIds = [] // finding loses its support
-    const c = recommendationChain(p, p.recommendations[0])
-    expect(c.level).toBe('unsupported')
-    expect(c.reason).toBe('brokenChain')
+    p.synthesis.findings[0].analysisIds = []
+    expect(recommendationChain(p, p.recommendations[0])).toMatchObject({ level: 'unsupported', reason: 'brokenChain' })
     expect(evaluateStep(p, 'recommendations').status).toBe('needs-evidence')
   })
   it('no finding: incomplete unless explicitly precautionary and justified', () => {
@@ -104,14 +122,33 @@ describe('recommendation chain', () => {
     r.precautionary = true
     expect(evaluateStep(p, 'recommendations').status).toBe('incomplete') // justification missing
     r.precautionaryJustification = 'Prevents contamination while tests run.'
-    expect(recommendationChain(p, r).level).toBe('precautionary')
+    expect(recommendationChain(p, r)).toMatchObject({ level: 'precautionary', reason: 'precaution' })
     expect(evaluateStep(p, 'recommendations').status).toBe('complete-limited')
   })
-  it('investigate and rejected actions need no evidence chain', () => {
+  it('a justified emergency action on incomplete evidence is precautionary, not unsupported or partial', () => {
+    const { p } = solid()
+    p.analyses[0].result = 'not-tested'
+    const r = p.recommendations[0]
+    Object.assign(r, { precautionary: true, precautionaryJustification: 'Risk to health if we wait.' })
+    expect(recommendationChain(p, r).level).toBe('precautionary')
+  })
+  it('“requires further investigation” is its own state; rejected options have none', () => {
     const { p } = solid()
     const r = newRecommendation()
     r.disposition = 'investigate'
+    expect(recommendationChain(p, r)).toMatchObject({ level: 'investigate', reason: 'disposition' })
+    r.disposition = 'rejected'
     expect(recommendationChain(p, r).level).toBe('na')
+  })
+  it('surfaces the issues addressed and the limitations that affect the recommendation', () => {
+    const { p } = solid()
+    p.synthesis.findings[0].uncertain = 'Only one month of data'
+    const c = recommendationChain(p, p.recommendations[0])
+    expect(c.issueIds).toEqual([p.analyses[0].issueId])
+    expect(c.limitations.map((l) => [l.source, l.text])).toEqual([
+      ['finding', 'Only one month of data'],
+      ['analysis', 'l'],
+    ])
   })
 })
 
