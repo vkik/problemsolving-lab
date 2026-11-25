@@ -35,7 +35,9 @@ Problem → Issues → Priorities → Work plan → Analyses (evidence) → Find
   - A visual tree, exportable as PNG or SVG, with an issue-tree vs. hypothesis-tree choice.
   - **Guided structure review (MECE).** Six questions: relevance, mutually exclusive, collectively exhaustive, consistent logic, causes vs. symptoms and consequences, and tree type. Each comes with an explanation and automatic observations (near-duplicate siblings, single-child branches, too many siblings, mixed questions and statements, tagged symptoms or consequences, content that doesn't match the tree type).
   - The observations never answer a question. Acceptance stays a documented human judgement: it needs all six consistent answers, and it is flagged again if the tree changes afterwards.
-  - A **role** for each branch: driver/component, symptom or consequence.
+  - A **review record**: overlaps found, missing areas, corrections made, reviewer and comments. It is shown in the report.
+  - A **role** for each branch: driver/component, root cause, contributing factor, symptom or consequence.
+  - A side-by-side note on **issue trees vs. hypothesis trees**, to help choose the right one.
   - Fields for the hypothesis, rationale, alternatives and unknowns.
 - **Step 3, Prioritize.** Low/Medium/High impact and feasibility with a written rationale.
   - A 1–9 score and a 3×3 matrix.
@@ -51,19 +53,33 @@ Problem → Issues → Priorities → Work plan → Analyses (evidence) → Find
   - Correlation vs. causation, limitations, missing information and a revised hypothesis.
   - **An assumption can never silently become a verified fact.** Re-classifying requires a recorded verification, and imports enforce the same rule.
 - **Step 6, Synthesis.**
-  - A **data → finding → insight → implication → so what?** ladder, with definitions, prompts and an illustrative worked example. Each finding is written rung by rung.
-  - The Forward playbook's one-sentence *insight + implication*, with a draft built only from your own words. Warnings flag multi-sentence synthesis, a missing implication, or an insight that only restates the finding.
-  - **Support status** for every finding: *validated*; *provisional* (untested or inconclusive analyses, no verified fact/observation/external evidence, or evidence rated low in quality); or *not linked*.
+  - A **data → finding → insight → implication → so what? → decision relevance** ladder, with definitions, prompts, an illustrative worked example and a seven-question worksheet. Each finding is written rung by rung, with an optional note on what you believed before the analysis.
+  - The Forward playbook's one-sentence *insight + implication*, with a *“Because …, …”* draft built only from your own words. Warnings flag multi-sentence synthesis, a missing implication, or an insight that only restates the finding.
+  - **Evidence class** for every finding, always shown with its reasons:
+    - *verified*: tested and strongly evidenced, no reservations;
+    - *partially supported*: tested and strongly evidenced, with reservations;
+    - *preliminary*: not tested, or only assumptions or interpretations;
+    - *inconclusive*: the analyses were inconclusive;
+    - *unsupported claim*: no links, or links with nothing recorded.
+  - An **evidence-quality panel** for each finding (reliability, accuracy, completeness, recency, confidence) and whether each analysis documents its limitations.
   - The four-question **So what?** test and ranked insights.
 - **Step 7, Recommendations.**
   - All required fields, time horizons (immediate, short, medium, long term), and recommended / further investigation / rejected-with-justification.
-  - Full traceability: Recommendation → Finding → Analysis → Evidence, with a status for each action: *evidence-backed*, *backed with limitations*, *precautionary* or *unsupported*. An action is never shown as evidence-backed when its chain is broken.
+  - Full traceability: Recommendation → Finding → Analysis → Evidence, including the **issues addressed** and the **limitations affecting** each action.
+  - A state for each action, with its reason: *evidence-backed*, *partially supported*, *precautionary*, *requires further investigation* or *unsupported*. An action is never shown as evidence-backed when its chain is broken.
   - **Precautionary actions** are allowed when explicitly marked and justified.
-- **Evidence-based completion.** Each step is *Complete*, *Complete with documented limitations*, *Needs further evidence* or *Incomplete*. A quality-check list shows why. Documented uncertainty is accepted; unsupported claims are not counted as complete.
-- **Reliable saving.** Edits are written to storage immediately, one write at a time.
+- **Evidence-based completion.** Each step is *Complete*, *Complete with documented limitations*, *Needs further evidence* or *Incomplete*. A quality-check list shows why. Documented uncertainty is accepted; unsupported claims are not counted as complete. The screens separate what you enter, automatic validation, the methodological review and the completion status.
+- **Reliable saving.** Edits are written to storage immediately, one write at a time. The header shows *Saving…*, *Unsaved changes*, *Saved — all changes stored on this device*, *Save failed — retrying* or *Retry required*. *Saved* appears only after storage confirms the write.
   - If the browser refuses a write (storage full or blocked), the change is kept in the tab and retried automatically (after 1, 3, 10 and 30 s).
-  - A banner offers *Retry now* and *Export backup*, and the app asks for confirmation before you close a tab with unsaved changes.
-- **Executive report.** It compiles all seven steps into eleven sections in English or Arabic, independently of the interface language. Print it or save it as PDF, and export it as a JSON backup.
+  - A **recovery copy** is kept in `localStorage` while a change is unsaved after a failure, and when the tab is hidden or closed with pending changes. On the next start, a copy newer than storage is restored and saved again, with a notice naming the project.
+  - A banner offers *Retry now* and *Export backup*, and says whether the recovery copy could be stored. The app asks for confirmation before you close a tab with unsaved changes.
+- **Executive report.** It compiles all seven steps into thirteen sections in English or Arabic, independently of the interface language:
+  - an evidence register grouped by class (facts, observations, external evidence, assumptions, interpretations);
+  - verified conclusions kept apart from partially supported, preliminary and inconclusive findings;
+  - a reasoning chain for every recommendation;
+  - an implementation plan, and risks and outstanding questions.
+
+  Print it or save it as PDF, and export it as a JSON backup.
 - **Coaching on every step.**
   - Purpose, method, expected output, a practical example, common mistakes, guiding questions, a quality checklist and completion criteria.
   - **Think Deeper**: you write your own answer before the coaching prompt is revealed.
@@ -90,7 +106,8 @@ npm run dev          # http://localhost:5173/problemsolving-lab/
 | `npm run preview` | Serve the production build on port 4173 |
 | `npm test` | Unit tests (Vitest) |
 | `npm run test:e2e` | End-to-end acceptance tests (Playwright; builds and serves automatically) |
-| `npm run lint` | Lint with oxlint |
+| `npm run lint` | Lint with [oxlint](https://oxc.rs) (used instead of ESLint: one dev dependency, no plugin set; CI fails on errors) |
+| `npm run typecheck` | TypeScript project check without emitting |
 
 ## Deployment (GitHub Pages)
 
@@ -143,6 +160,15 @@ src/
 tests/e2e/     Playwright acceptance tests
 docs/          data model and testing report
 ```
+
+## Known limitations
+
+- **Closing the tab.** Saving starts on every edit; the app flushes and takes a recovery copy when the tab is hidden or closed. A browser may still abort an IndexedDB write started while the page is closing; this is not guaranteed by any web app. The synchronous recovery copy is the safety net.
+- **Recovery copy size.** It lives in `localStorage` (about 5 MB per site in most browsers). If that is full too, the banner says so; export a backup.
+- **Heuristics.** Structure observations and SMART hints use keywords and word overlap. They prompt reflection and never decide.
+- **No sync.** Projects live in one browser; use backups to move them.
+
+See [`docs/TESTING.md`](docs/TESTING.md) for the full list.
 
 ## Data and privacy
 
