@@ -208,7 +208,8 @@ test('5–9. prioritize → work plan → analyses → findings → recommendati
   // 10. Report compiles everything; print is wired to the browser print dialog
   await page.goto(projectUrl(page) + '/report')
   const rep = page.getByTestId('report')
-  for (let i = 1; i <= 11; i++) await expect(rep.locator(`#s${i}`)).toBeVisible()
+  // v1.1: the report has 13 sections (was 11)
+  for (let i = 1; i <= 13; i++) await expect(rep.locator(`#s${i}`)).toBeVisible()
   await expect(rep).toContainText('Most outages follow grid failures')
   await expect(page.getByTestId('report-actionplan')).toContainText('Install standby generator')
   await expect(page.getByTestId('report-workplan')).toContainText('Halima')
