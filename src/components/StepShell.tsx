@@ -116,7 +116,10 @@ function GuidancePanel({ project, step, compact = false }: { project: Project; s
         </ul>
       </Disclosure>
       <div className="rounded-lg border border-navy-100 bg-white p-3">
-        <p className="mb-2 text-sm font-semibold text-navy-900">{t('shell.checklist')}</p>
+        <p className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-navy-900">
+          <span className="badge bg-navy-900 text-white">{t('mece.reviewKind')}</span>
+          {t('shell.checklist')}
+        </p>
         <div className="space-y-2" data-testid="checklist">
           {c.checklist.map((item) => (
             <Checkbox
@@ -129,8 +132,11 @@ function GuidancePanel({ project, step, compact = false }: { project: Project; s
         </div>
       </div>
       <div className="rounded-lg border border-navy-100 bg-white p-3" data-testid="criteria">
-        <p className="mb-2 flex items-center justify-between text-sm font-semibold text-navy-900">
-          {t('shell.criteria')}
+        <p className="mb-2 flex items-center justify-between gap-2 text-sm font-semibold text-navy-900">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="badge bg-teal-600 text-white">{t('shell.kind.status')}</span>
+            {t('shell.criteria')}
+          </span>
           <span className={`badge ${met === criteria.length ? 'bg-teal-50 text-teal-700' : 'bg-navy-50 text-navy-700'}`}>
             {met}/{criteria.length}
           </span>
