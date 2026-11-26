@@ -73,6 +73,11 @@ Problem → Issues → Priorities → Work plan → Analyses (evidence) → Find
   - If the browser refuses a write (storage full or blocked), the change is kept in the tab and retried automatically (after 1, 3, 10 and 30 s).
   - A **recovery copy** is kept in `localStorage` while a change is unsaved after a failure, and when the tab is hidden or closed with pending changes. On the next start, a copy newer than storage is restored and saved again, with a notice naming the project.
   - A banner offers *Retry now* and *Export backup*, and says whether the recovery copy could be stored. The app asks for confirmation before you close a tab with unsaved changes.
+- **Backup and storage protection.** Projects live only on the device, so the dashboard has a *Backup and storage* panel:
+  - It shows the last backup, how many projects have changes not in any backup, and whether the browser protects the storage from being cleared (with a button to ask for protection).
+  - *Share backup* sends the file straight to Google Drive, WhatsApp or email on phones that support it; *Download backup* works everywhere.
+  - A reminder appears when a project has gone a week with changes outside any backup. *Later* hides it for three days.
+  - Imported projects count as backed up, since they came from a file.
 - **Executive report.** It compiles all seven steps into thirteen sections in English or Arabic, independently of the interface language:
   - an evidence register grouped by class (facts, observations, external evidence, assumptions, interpretations);
   - verified conclusions kept apart from partially supported, preliminary and inconclusive findings;

@@ -365,3 +365,103 @@ test.describe('v1.1 second pass: review record, decision relevance, report reaso
     expect(pdf.byteLength).toBeGreaterThan(20_000)
   })
 })
+
+test.describe('data-loss protection: backups and storage', () => {
+  /** Pretend the device has a share sheet; record what was shared, or cancel. */
+  async function stubShare(page: Page, mode: 'ok' | 'cancel') {
+    await page.addInitScript((m) => {
+      const w = window as unknown as { __shared: string[] }
+      w.__shared = []
+      Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true })
+      Object.defineProperty(navigator, 'share', {
+        configurable: true,
+        value: async (data: { files: File[] }) => {
+          if (m === 'cancel') throw new DOMException('cancelled', 'AbortError')
+          w.__shared.push(data.files[0].name + ':' + (await data.files[0].text()).length)
+        },
+      })
+    }, mode)
+  }
+  const sampleId = (page: Page) => projectUrl(page).split('/p/')[1]
+
+  test('the panel tracks what is backed up; downloading records a backup that survives reload', async ({ page }) => {
+    await loadSample(page)
+    await waitSaved(page)
+    const url = projectUrl(page)
+    await page.goto('./')
+    const panel = page.getByTestId('backup-panel')
+    await expect(panel.getByTestId('backup-last')).toContainText('No backup yet')
+    await expect(panel.getByTestId('backup-pending')).toHaveAttribute('data-count', '1')
+    await expect(panel.getByTestId('storage-status')).toBeVisible()
+    await expect(panel.getByTestId('share-all')).toHaveCount(0) // desktop Chromium has no file share sheet
+    const download = page.waitForEvent('download')
+    await panel.getByTestId('panel-download').click()
+    expect((await download).suggestedFilename()).toMatch(/^problemsolving-lab-backup-\d{4}-\d{2}-\d{2}\.psl\.json$/)
+    await expect(panel.getByTestId('backup-pending')).toHaveAttribute('data-count', '0')
+    await expect(panel.getByTestId('backup-last')).toContainText('Last backup')
+    await page.reload()
+    await expect(page.getByTestId('backup-pending')).toHaveAttribute('data-count', '0')
+    // An edit makes the project “not backed up” again.
+    await page.goto(url + '/step/define')
+    await page.getByTestId('define-gap').fill('Edited after the backup')
+    await waitSaved(page)
+    await page.goto('./')
+    await expect(page.getByTestId('backup-pending')).toHaveAttribute('data-count', '1')
+  })
+
+  test('a week without a backup shows a reminder; “Later” hides it across reloads', async ({ page }) => {
+    await loadSample(page)
+    await waitSaved(page)
+    const id = sampleId(page)
+    await page.evaluate((pid) => {
+      localStorage.setItem('psl.backups', JSON.stringify({ byId: { [pid]: new Date(Date.now() - 10 * 864e5).toISOString() }, snoozeUntil: '' }))
+    }, id)
+    await page.goto(projectUrl(page) + '/step/define')
+    await page.reload()
+    await page.getByTestId('define-gap').fill('Changed since the old backup')
+    await waitSaved(page)
+    await page.goto('./')
+    const reminder = page.getByTestId('backup-reminder')
+    await expect(reminder).toBeVisible()
+    await reminder.getByTestId('reminder-later').click()
+    await expect(reminder).toHaveCount(0)
+    await page.reload()
+    await expect(page.getByTestId('backup-reminder')).toHaveCount(0)
+    await expect(page.getByTestId('backup-pending')).toHaveAttribute('data-count', '1')
+  })
+
+  test('phone: sharing a backup records it; the layout fits in English and Arabic', async ({ page }) => {
+    await stubShare(page, 'ok')
+    await page.setViewportSize({ width: 390, height: 844 })
+    await loadSample(page)
+    await waitSaved(page)
+    await page.evaluate((pid) => {
+      localStorage.setItem('psl.backups', JSON.stringify({ byId: { [pid]: '2000-01-01T00:00:00.000Z' }, snoozeUntil: '' }))
+    }, sampleId(page))
+    await page.goto('./')
+    await page.reload()
+    await expect(page.getByTestId('backup-reminder')).toBeVisible()
+    for (const lang of ['en', 'ar']) {
+      if (lang === 'ar') await page.getByTestId('lang-toggle').click()
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      expect(overflow, `dashboard overflow (${lang})`).toBeLessThanOrEqual(1)
+    }
+    await page.getByTestId('reminder-share').click()
+    await expect(page.getByTestId('backup-reminder')).toHaveCount(0)
+    await expect(page.getByTestId('backup-pending')).toHaveAttribute('data-count', '0')
+    const shared = await page.evaluate(() => (window as unknown as { __shared: string[] }).__shared)
+    expect(shared).toHaveLength(1)
+    expect(shared[0]).toMatch(/\.psl\.json:\d{4,}$/)
+  })
+
+  test('cancelling the share sheet does not count as a backup', async ({ page }) => {
+    await stubShare(page, 'cancel')
+    await loadSample(page)
+    await waitSaved(page)
+    await page.goto('./')
+    await page.getByTestId('share-all').click()
+    await page.waitForTimeout(200)
+    await expect(page.getByTestId('backup-pending')).toHaveAttribute('data-count', '1')
+    await expect(page.getByTestId('backup-last')).toContainText('No backup yet')
+  })
+})

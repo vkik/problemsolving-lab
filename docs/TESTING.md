@@ -1,15 +1,15 @@
 # Testing report
 
-**Version:** 1.1.0 · **Date:** 25 November 2026 · **Branch:** `feature/v1.1-quality-enhancements`
+**Version:** 1.1.0 · **Date:** 26 November 2026 · **Branch:** `feature/v1.1-quality-enhancements`
 **Browser:** Chromium via Playwright (Google Chrome locally), against the production build served under `/problemsolving-lab/`.
 
 | Check | Command | Result |
 |-------|---------|--------|
 | Type-check | `npm run typecheck` | ✅ no errors |
 | Lint | `npm run lint` (oxlint, used instead of ESLint) | ✅ 0 errors · 23 warnings (React fast-refresh export style, `Date` read during render; none affects behaviour) |
-| Unit tests (Vitest) | `npm test` | ✅ 83 / 83 in 5 files |
+| Unit tests (Vitest) | `npm test` | ✅ 89 / 89 in 6 files |
 | Production build | `npm run build` | ✅ 19 precached entries (≈ 956 KiB) |
-| Acceptance tests (Playwright) | `npm run test:e2e` | ✅ 32 / 32 in 3 files |
+| Acceptance tests (Playwright) | `npm run test:e2e` | ✅ 36 / 36 in 3 files |
 
 Every end-to-end test also fails if the browser logs a console error or an uncaught exception. CI runs the same checks on every pull request and on `main` (see README → Deployment).
 
@@ -18,6 +18,7 @@ Every end-to-end test also fails if the browser logs a console error or an uncau
 | File | Covers |
 |------|--------|
 | `src/lib/saveQueue.test.ts` (21) | Failed snapshots retained and persisted on retry; back-off schedule, then *Retry required*; manual retry; one write at a time with coalescing; an older snapshot never overwrites a newer one; delete waits for the in-flight write; no debounce timer. **Flush semantics:** concurrent flushes both wait for every write; a flush during an active write does not resolve before it commits; an edit that arrives during a flush and then fails is reported; rapid edits write only the latest snapshot. **Recovery journal:** copies taken on failure, none on healthy saves, journal failure reported, `hold()` marks a restored snapshot unsaved. **Lifecycle:** flush on hidden, best-effort flush on `pagehide`, confirmation on `beforeunload` only when unsaved, a recovery copy before flushing, unregister |
+| `src/lib/backup.test.ts` (6) | Backup reminder: no nagging on a new project; reminder after a week without a backup; a backup covers a project until it changes; a recent backup never reminds; *Later* snoozes for three days; only exported projects are recorded |
 | `src/lib/journal.test.ts` (3) | Store / list / remove; failure reported when storage is full or missing; unreadable entries cleaned up |
 | `src/store/projects.test.ts` (8) | Store-level persistence with a faulty storage double: D1 regression; reload returns stored data; reload after a failed write restores the journal copy (D7); same-timestamp copy restored only if different; stale copy ignored and removed; never-stored project restored; delete removes the copy; indicator states saving → saved and failure → retrying with unsaved count |
 | `src/lib/evaluation.test.ts` (29) | All five finding classes with their reasons; quality profile and missing analysis limitations. All five recommendation states (backed, partial, precautionary only with a justification, investigate, unsupported for no finding or a broken chain), issues addressed and limitations. Define and analyses states; empty project with no vacuous passes; v1 → v2 migration; structure observations (which never change the review); synthesis warnings |
@@ -85,6 +86,10 @@ Storage faults are simulated by making `IDBObjectStore.put` throw a `QuotaExceed
 | Synthesis | Worksheet, decision relevance and evidence-quality panel | ✅ |
 | Report | 13 sections; evidence register by class; verified vs. other findings; reasoning chain for each recommendation | ✅ |
 | Migration | A v1 backup imports, upgrades to v2 and shows the new-questions notice | ✅ |
+| Backups | The panel counts projects not backed up; *Download backup* records a backup that survives reload; a later edit makes the project pending again | ✅ |
+| Backups | A week without a backup shows the reminder; *Later* hides it across reloads | ✅ |
+| Backups | Phone (390 px), English and Arabic: no overflow; *Share backup* hands a full backup file to the share sheet and records it | ✅ |
+| Backups | Cancelling the share sheet does not count as a backup | ✅ |
 
 ## Regression tests for every defect fixed
 
@@ -133,4 +138,6 @@ No test was removed or weakened. These assertions changed because the behaviour 
 - **Lint.** oxlint is used instead of ESLint (one dependency, no plugin set). Its 23 warnings are style-level; CI fails on errors.
 - **Pages deploy actions** (`configure-pages@v5`, `upload-pages-artifact@v3`, `deploy-pages@v4`) are kept at their proven versions. They still trigger GitHub's Node 20 deprecation notice. They run only on `main`, so upgrade them in a separate change that can be verified with a deploy.
 - **PDF** output uses the browser's *Print → Save as PDF*. Issue-tree image export uses system fonts.
+- **Storage protection** depends on the browser. Chrome usually grants it to installed apps; Safari decides on its own. The panel shows the actual answer.
+- **Share backup** appears only where the device can share files (most Android and iOS phones). The share is recorded only when the share sheet completes; whether the receiving app then stored the file is outside the app's knowledge.
 - **Collaboration and sync** are not included. Projects live in one browser; use backups to move them.

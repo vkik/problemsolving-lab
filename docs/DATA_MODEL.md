@@ -116,6 +116,7 @@ Structure observations (`src/lib/structureChecks.ts`) are read-only hints. They 
   - A synchronous copy of each snapshot not yet persisted is taken when a write fails, and when the tab is hidden, unloading or closing with pending changes.
   - On start-up, a copy newer than the stored project, or equally recent but different, is restored and saved again, and a notice names the recovered projects. Older copies are discarded.
   - Copies are removed once the same version is persisted and when a project is deleted. If `localStorage` is full or blocked, the banner says so.
+- **Backup record** (`src/lib/backup.ts`, `localStorage` key `psl.backups`): `{ byId: { projectId: ISO time of last export }, snoozeUntil }`. Not project data and never included in backups.
 - **Save queue** (`src/lib/saveQueue.ts`):
   - Every edit hands the latest project snapshot to the queue, and writing starts immediately (no debounce).
   - Writes run one at a time and in order, so an older snapshot can never overwrite a newer one. Edits made during a write are coalesced.
