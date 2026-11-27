@@ -14,6 +14,7 @@ import {
   HORIZONS,
   HYPOTHESIS_RESULTS,
   MECE_KEYS,
+  NODE_KINDS,
   PROJECT_STATUSES,
   QUALITY_KEYS,
   SCHEMA_VERSION,
@@ -112,6 +113,7 @@ export function sanitizeProject(input: unknown): Project {
       node.note = str(n.note)
       node.order = typeof n.order === 'number' && Number.isFinite(n.order) ? n.order : i
       node.collapsed = bool(n.collapsed)
+      node.kind = oneOf(n.kind, NODE_KINDS, '')
       return node
     })
     .filter((n) => (seen.has(n.id) ? false : (seen.add(n.id), true)))
@@ -137,6 +139,8 @@ export function sanitizeProject(input: unknown): Project {
   p.structure.meceStatus = oneOf(s.meceStatus, ['not-reviewed', 'needs-improvement', 'accepted'] as const, 'not-reviewed')
   p.structure.meceReviewedAt = typeof s.meceReviewedAt === 'string' ? isoStr(s.meceReviewedAt, '') || null : null
   p.structure.meceSignature = str(s.meceSignature)
+  const rv = isObj(s.review) ? s.review : {}
+  p.structure.review = { overlaps: str(rv.overlaps), missing: str(rv.missing), corrections: str(rv.corrections), reviewer: str(rv.reviewer), comments: str(rv.comments) }
   const h = isObj(s.hypothesis) ? s.hypothesis : {}
   p.structure.hypothesis = { initial: str(h.initial), rationale: str(h.rationale), alternatives: str(h.alternatives), unknowns: str(h.unknowns) }
 
@@ -211,7 +215,7 @@ export function sanitizeProject(input: unknown): Project {
   p.synthesis.findings = arr(sy.findings).filter(isObj).map((f) => {
     const fd = newFinding()
     fd.id = idStr(f.id, 'fnd')
-    for (const k of ['discovery', 'insight', 'implication', 'meaning', 'whyMatters', 'uncertain'] as const) fd[k] = str(f[k])
+    for (const k of ['discovery', 'insight', 'implication', 'meaning', 'whyMatters', 'uncertain', 'decision', 'priorBelief'] as const) fd[k] = str(f[k])
     fd.analysisIds = strArr(f.analysisIds).filter((id) => analysisIds.has(id))
     fd.evidenceIds = strArr(f.evidenceIds).filter((id) => evidenceIds.has(id))
     return fd
@@ -231,6 +235,8 @@ export function sanitizeProject(input: unknown): Project {
     rec.horizon = oneOf(r.horizon, HORIZONS, 'short')
     rec.disposition = oneOf(r.disposition, DISPOSITIONS, 'recommended')
     rec.findingIds = strArr(r.findingIds).filter((id) => findingIds.has(id))
+    rec.precautionary = bool(r.precautionary)
+    rec.precautionaryJustification = str(r.precautionaryJustification)
     return rec
   })
 
@@ -248,13 +254,32 @@ export function sanitizeProject(input: unknown): Project {
   return p
 }
 
-/** Upgrade older schema versions step by step. Version 0 = unversioned (treated as v1 shape). */
+/**
+ * Upgrade older schema versions step by step, before validation.
+ * - v0 (unversioned) → v1: same shape.
+ * - v1 → v2: issue nodes gain `kind` (unclassified); recommendations gain `precautionary` (false)
+ *   and `precautionaryJustification`; the structure review gains two questions (`causes`,
+ *   `treeType`) as unanswered, plus empty review notes; findings gain empty `decision` and
+ *   `priorBelief`. A review accepted under v1 stays accepted — the UI asks the user to
+ *   answer the two new questions at the next review, and the step reports it as a documented limitation.
+ */
 function migrate(raw: Obj, fromVersion: number): Obj {
-  let data = raw
-  if (fromVersion < 1) {
-    data = { ...data, schemaVersion: 1 }
+  let data: Obj = raw
+  if (fromVersion < 1) data = { ...data, schemaVersion: 1 }
+  if (fromVersion < 2) {
+    const s = isObj(data.structure) ? data.structure : {}
+    const mece = isObj(s.mece) ? s.mece : {}
+    data = {
+      ...data,
+      schemaVersion: 2,
+      structure: {
+        ...s,
+        nodes: arr(s.nodes).map((n) => (isObj(n) ? { kind: '', ...n } : n)),
+        mece: { causes: { answer: 'unanswered', note: '' }, treeType: { answer: 'unanswered', note: '' }, ...mece },
+      },
+      recommendations: arr(data.recommendations).map((r) => (isObj(r) ? { precautionary: false, precautionaryJustification: '', ...r } : r)),
+    }
   }
-  // Future: if (fromVersion < 2) { ...transform v1 → v2... }
   return data
 }
 

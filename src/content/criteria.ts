@@ -5,7 +5,8 @@ export const CRITERIA: Record<string, Record<Lang, string>> = {
   'define.question': { en: 'A problem question is written', ar: 'سؤال المشكلة مكتوب' },
   'define.worksheet': { en: 'At least 6 of the 8 core worksheet fields are completed', ar: 'اكتمال 6 على الأقل من الحقول الأساسية الثمانية في ورقة العمل' },
   'define.smartAssessed': { en: 'All five SMART criteria are assessed', ar: 'تقييم معايير SMART الخمسة جميعها' },
-  'define.smartMet': { en: 'You judge every SMART criterion as met', ar: 'تحكم بأن جميع معايير SMART متحققة' },
+  'define.smartNoneUnmet': { en: 'No SMART criterion is judged “not met”', ar: 'لا يوجد معيار SMART مُقيَّم بأنه «غير متحقق»' },
+  'define.smartPartlyExplained': { en: 'Every “partly” verdict explains what is missing', ar: 'كل تقييم «جزئيًا» يوضح ما الذي ينقص' },
   'define.statement': { en: 'A final problem statement is written', ar: 'كتابة بيان المشكلة النهائي' },
   'structure.branches': { en: 'At least two top-level branches', ar: 'فرعان رئيسيان على الأقل' },
   'structure.depth': { en: 'At least one branch is broken down further', ar: 'تقسيم فرع واحد على الأقل إلى مستوى أدنى' },
@@ -24,10 +25,42 @@ export const CRITERIA: Record<string, Record<Lang, string>> = {
   'analyses.conclusion': { en: 'Tested analyses state a conclusion and limitations', ar: 'التحليلات المختبرة تذكر الخلاصة والقيود' },
   'synthesis.findings': { en: 'Every finding has an insight sentence and an implication', ar: 'لكل نتيجة جملة استنتاج وأثر' },
   'synthesis.linked': { en: 'Every finding is linked to analyses or evidence', ar: 'كل نتيجة مرتبطة بتحليلات أو أدلة' },
+  'synthesis.statementInterpretation': { en: 'Every finding states what was found and its interpretation (insight)', ar: 'كل نتيجة تذكر ما وُجد وتفسيره (الاستنتاج)' },
   'synthesis.soWhat': { en: 'All four “So what?” questions answered', ar: 'الإجابة عن أسئلة «إذن ماذا؟» الأربعة' },
   'recommendations.exists': { en: 'At least one recommended action', ar: 'إجراء موصى به واحد على الأقل' },
   'recommendations.ownerTimeline': { en: 'Each recommended action has an owner and a deadline', ar: 'لكل إجراء موصى به مسؤول وموعد نهائي' },
   'recommendations.kpi': { en: 'Each recommended action has a KPI and verification method', ar: 'لكل إجراء موصى به مؤشر أداء وطريقة تحقق' },
-  'recommendations.traceable': { en: 'Each recommended action is linked to a finding', ar: 'كل إجراء موصى به مرتبط بنتيجة' },
+  'recommendations.traceable': { en: 'Each recommended action is linked to a finding, or marked precautionary with a justification', ar: 'كل إجراء موصى به مرتبط بنتيجة، أو مصنّف احترازيًا مع مبرر' },
+  'recommendations.precautionaryJustified': { en: 'Every precautionary action states why it is justified', ar: 'كل إجراء احترازي يوضح مبرره' },
   'recommendations.rejectedJustified': { en: 'Every rejected option has a justification', ar: 'لكل خيار مرفوض مبرر' },
+}
+
+/**
+ * Quality checks (lib/progress.ts → stepIssues). {item} is replaced by the item concerned.
+ * "limitation" checks make a step "Complete with documented limitations";
+ * "needs-evidence" checks make it "Needs further evidence".
+ */
+export const CHECKS: Record<string, Record<Lang, string>> = {
+  'define.smartPartly': { en: 'SMART “{item}” is only partly met (explained in your note)', ar: 'معيار SMART «{item}» متحقق جزئيًا (موضّح في ملاحظتك)' },
+  'structure.reviewIncomplete': {
+    en: 'Review accepted before the two new questions (causes vs symptoms, tree type) were added — answer them at your next review',
+    ar: 'قُبلت المراجعة قبل إضافة السؤالين الجديدين (الأسباب مقابل الأعراض، نوع الشجرة) — أجب عنهما في مراجعتك القادمة',
+  },
+  'prioritize.lowConfidence': { en: 'Selected with low confidence: {item}', ar: 'مختارة بدرجة ثقة منخفضة: {item}' },
+  'analyses.untested': { en: 'Not yet tested: {item}', ar: 'لم تُختبر بعد: {item}' },
+  'analyses.inconclusive': { en: 'Inconclusive: {item}', ar: 'غير حاسمة: {item}' },
+  'analyses.supportedOnAssumptions': { en: 'Marked supported on assumptions/interpretations only: {item}', ar: 'مصنّفة مدعومة اعتمادًا على افتراضات/تفسيرات فقط: {item}' },
+  'analyses.causalNoFacts': { en: 'Causal link claimed without facts or observations: {item}', ar: 'ادعاء علاقة سببية دون حقائق أو ملاحظات: {item}' },
+  'analyses.lowQuality': { en: 'Relies on evidence rated low in quality: {item}', ar: 'تعتمد على أدلة منخفضة الجودة: {item}' },
+  'synthesis.partial': { en: 'Partially supported finding without documented uncertainty: {item} — strengthen the evidence or state what remains uncertain', ar: 'نتيجة مدعومة جزئيًا دون توثيق لعدم اليقين: {item} — عزّز الأدلة أو وضّح ما لا يزال غير مؤكد' },
+  'synthesis.partialDocumented': { en: 'Partially supported finding, uncertainty documented: {item}', ar: 'نتيجة مدعومة جزئيًا، مع توثيق عدم اليقين: {item}' },
+  'synthesis.preliminary': { en: 'Preliminary finding without documented uncertainty: {item} — strengthen the evidence or state what remains uncertain', ar: 'نتيجة مبدئية دون توثيق لعدم اليقين: {item} — عزّز الأدلة أو وضّح ما لا يزال غير مؤكد' },
+  'synthesis.preliminaryDocumented': { en: 'Preliminary finding, uncertainty documented: {item}', ar: 'نتيجة مبدئية، مع توثيق عدم اليقين: {item}' },
+  'synthesis.inconclusive': { en: 'Inconclusive finding without documented uncertainty: {item} — strengthen the evidence or state what remains uncertain', ar: 'نتيجة غير حاسمة دون توثيق لعدم اليقين: {item} — عزّز الأدلة أو وضّح ما لا يزال غير مؤكد' },
+  'synthesis.inconclusiveDocumented': { en: 'Inconclusive finding, uncertainty documented: {item}', ar: 'نتيجة غير حاسمة، مع توثيق عدم اليقين: {item}' },
+  'synthesis.unsupported': { en: 'Unsupported claim — the linked analyses record no results or evidence: {item}', ar: 'ادعاء غير مدعوم — التحليلات المرتبطة لا تسجل نتائج أو أدلة: {item}' },
+  'recommendations.unsupported': { en: 'Not linked to any finding: {item}', ar: 'غير مرتبطة بأي نتيجة: {item}' },
+  'recommendations.brokenChain': { en: 'Evidence chain broken (a linked finding is an unsupported claim): {item}', ar: 'سلسلة الأدلة منقطعة (نتيجة مرتبطة ادعاء غير مدعوم): {item}' },
+  'recommendations.partial': { en: 'Partially supported — linked findings are not all verified: {item}', ar: 'مدعومة جزئيًا — ليست كل النتائج المرتبطة مُتحقق منها: {item}' },
+  'recommendations.precautionary': { en: 'Precautionary action (justified, not evidence-backed): {item}', ar: 'إجراء احترازي (مبرر، وغير مدعوم بالأدلة): {item}' },
 }

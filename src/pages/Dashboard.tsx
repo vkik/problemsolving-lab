@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Archive, ArchiveRestore, Copy, Download, FlaskConical, Plus, Trash2, Upload, CalendarClock, AlertTriangle, ListChecks } from 'lucide-react'
+import { Archive, ArchiveRestore, Copy, Download, FlaskConical, Plus, Trash2, Upload, CalendarClock, AlertTriangle, ListChecks, Share2, ShieldCheck, ShieldAlert, BellRing } from 'lucide-react'
 import { formatDate, useT } from '../i18n'
 import { useProjects } from '../store/projects'
 import { completedSteps, outstanding, projectProgress } from '../lib/progress'
-import { exportProjects, pickFile } from '../lib/files'
+import { canShareFiles, exportProjects, pickFile, shareProjects } from '../lib/files'
+import { backupStatus, useBackups } from '../lib/backup'
 import { prepareImport } from '../lib/importer'
 import { ImportError } from '../lib/migrate'
 import { buildSampleProject } from '../lib/sample'
@@ -83,7 +84,12 @@ function ProjectCard({ p }: { p: Project }) {
       confirmLabel: t('common.delete'),
       danger: true,
     })
-    if (ok) await remove(p.id)
+    if (!ok) return
+    try {
+      await remove(p.id)
+    } catch {
+      toast(t('dash.deleteFailed'), 'error')
+    }
   }
 
   return (
@@ -195,6 +201,123 @@ function ProjectCard({ p }: { p: Project }) {
   )
 }
 
+const BACKUP_NAME = 'problemsolving-lab-backup'
+
+function useShare(projects: Project[]) {
+  const { t } = useT()
+  return async () => {
+    const r = await shareProjects(projects, BACKUP_NAME)
+    if (r === 'shared') toast(t('backup.shared'))
+    else if (r === 'failed') {
+      // Fall back to a normal download so the user still gets a file.
+      exportProjects(projects, BACKUP_NAME)
+      toast(t('backup.shareFailed'), 'error')
+    }
+  }
+}
+
+/** Shown when a project has had changes outside any backup for a week. */
+function BackupReminder({ projects }: { projects: Project[] }) {
+  const { t } = useT()
+  const record = useBackups((s) => s.record)
+  const snooze = useBackups((s) => s.snooze)
+  const share = useShare(projects)
+  const status = backupStatus(projects, record)
+  if (!status.remind) return null
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-gold-500/40 bg-gold-100 px-4 py-3 text-sm text-navy-900" role="status" data-testid="backup-reminder">
+      <BellRing className="h-5 w-5 shrink-0 text-gold-600" />
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold">{t('backup.remindTitle')}</div>
+        <div className="text-navy-700">{t('backup.remindBody', { n: status.notBackedUp.length })}</div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {canShareFiles() && (
+          <button className="btn-primary py-1.5" onClick={share} data-testid="reminder-share">
+            <Share2 className="h-4 w-4" />
+            {t('backup.share')}
+          </button>
+        )}
+        <button className="btn-secondary py-1.5" onClick={() => exportProjects(projects, BACKUP_NAME)} data-testid="reminder-download">
+          <Download className="h-4 w-4" />
+          {t('backup.download')}
+        </button>
+        <button className="btn-ghost py-1.5" onClick={snooze} data-testid="reminder-later">
+          {t('backup.later')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Last backup, what is not backed up yet, and whether the browser protects our storage. */
+function BackupPanel({ projects }: { projects: Project[] }) {
+  const { t, lang } = useT()
+  const record = useBackups((s) => s.record)
+  const persisted = useBackups((s) => s.persisted)
+  const checkPersisted = useBackups((s) => s.checkPersisted)
+  const requestPersist = useBackups((s) => s.requestPersist)
+  const share = useShare(projects)
+  useEffect(() => {
+    void checkPersisted()
+  }, [checkPersisted])
+  if (projects.length === 0) return null
+  const status = backupStatus(projects, record)
+  const n = status.notBackedUp.length
+  return (
+    <section className="card mb-6 p-4 sm:p-5" data-testid="backup-panel">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 space-y-2 text-sm">
+          <h2 className="text-base font-semibold text-navy-900">{t('backup.title')}</h2>
+          <p className="text-navy-700" data-testid="backup-last">
+            {status.lastAt ? t('backup.last', { date: formatDate(status.lastAt, lang) }) : t('backup.never')}
+          </p>
+          <p className={n > 0 ? 'font-medium text-gold-600' : 'text-teal-700'} data-testid="backup-pending" data-count={n}>
+            {n > 0 ? t('backup.pending', { n }) : t('backup.allSafe')}
+          </p>
+          <div className="flex flex-wrap items-center gap-2" data-testid="storage-status" data-persisted={String(persisted)}>
+            {persisted ? (
+              <span className="inline-flex items-center gap-1.5 text-teal-700">
+                <ShieldCheck className="h-4 w-4" />
+                {t('backup.persisted')}
+              </span>
+            ) : (
+              <>
+                <span className="inline-flex items-center gap-1.5 text-navy-700">
+                  <ShieldAlert className="h-4 w-4 text-gold-600" />
+                  {persisted === false ? t('backup.notPersisted') : t('backup.persistUnknown')}
+                </span>
+                {persisted === false && (
+                  <button
+                    className="btn-ghost py-1 text-xs"
+                    onClick={async () => toast((await requestPersist()) ? t('backup.persistGranted') : t('backup.persistDenied'))}
+                    data-testid="request-persist"
+                  >
+                    {t('backup.persistAsk')}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+          <p className="text-xs text-navy-600">{t('backup.tip')}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {canShareFiles() && (
+            <button className="btn-primary" onClick={share} data-testid="share-all">
+              <Share2 className="h-4 w-4" />
+              {t('backup.share')}
+            </button>
+          )}
+          <button className="btn-secondary" onClick={() => exportProjects(projects, BACKUP_NAME)} data-testid="panel-download">
+            <Download className="h-4 w-4" />
+            {t('backup.download')}
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function Dashboard() {
   const { t } = useT()
   const projects = useProjects((s) => s.projects)
@@ -223,8 +346,12 @@ export function Dashboard() {
     if (!file) return
     try {
       const { projects: imported, copies } = await prepareImport(file, new Set(Object.keys(projects)))
-      for (const p of imported) await put(p)
-      toast(`${t('dash.importDone', { n: imported.length })}${copies ? ' ' + t('dash.importCopyNote') : ''}`)
+      let saved = true
+      for (const p of imported) saved = (await put(p)).ok && saved
+      // Imported projects already exist in the file they came from.
+      if (saved) useBackups.getState().markBackedUp(imported)
+      if (!saved) toast(t('dash.importNotSaved', { n: imported.length }), 'error')
+      else toast(`${t('dash.importDone', { n: imported.length })}${copies ? ' ' + t('dash.importCopyNote') : ''}`)
     } catch (err) {
       const code = err instanceof ImportError ? err.message : 'failed'
       toast(t(`import.${code}` as never) || t('import.failed'), 'error')
@@ -237,7 +364,8 @@ export function Dashboard() {
       return
     }
     const p = buildSampleProject()
-    await put(p)
+    const r = await put(p)
+    if (!r.ok) toast(t('save.bannerTitle', { n: r.unsaved.length }), 'error')
     navigate(`/p/${p.id}`)
   }
 
@@ -266,7 +394,7 @@ export function Dashboard() {
               <Upload className="h-4 w-4" />
               {t('dash.import')}
             </button>
-            <button className="btn border border-white/20 text-white hover:bg-white/10" onClick={() => exportProjects(all, 'problemsolving-lab-backup')} disabled={all.length === 0} data-testid="export-all">
+            <button className="btn border border-white/20 text-white hover:bg-white/10" onClick={() => exportProjects(all, BACKUP_NAME)} disabled={all.length === 0} data-testid="export-all">
               <Download className="h-4 w-4" />
               {t('dash.exportAll')}
             </button>
@@ -287,6 +415,9 @@ export function Dashboard() {
       </section>
 
       <p className="mb-4 text-sm text-navy-700">{t('app.localOnly')}</p>
+
+      <BackupReminder projects={all} />
+      <BackupPanel projects={all} />
 
       {visible.length === 0 ? (
         <Empty>

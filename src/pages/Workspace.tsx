@@ -1,12 +1,12 @@
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ArrowRight, Check, Download, FileText } from 'lucide-react'
+import { ArrowRight, Download, FileText } from 'lucide-react'
 import { useT } from '../i18n'
 import { useProject, useProjects } from '../store/projects'
-import { projectProgress, stepComplete, stepCriteria } from '../lib/progress'
+import { evaluateStep, projectProgress, stepComplete } from '../lib/progress'
 import { exportProjects } from '../lib/files'
 import { STEP_KEYS } from '../lib/types'
 import { ProjectForm } from '../components/ProjectForm'
-import { stepState } from '../components/StepTracker'
+import { STATE_CIRCLE, StateIcon, stepState } from '../components/StepTracker'
 import { Notice, ProgressBar } from '../components/ui'
 
 export function Workspace() {
@@ -66,7 +66,8 @@ export function Workspace() {
           <ol className="space-y-2">
             {STEP_KEYS.map((s, i) => {
               const st = stepState(project, s)
-              const crit = stepCriteria(project, s)
+              const ev = evaluateStep(project, s)
+              const crit = ev.criteria
               const met = crit.filter((c) => c.met).length
               return (
                 <li key={s}>
@@ -74,13 +75,10 @@ export function Workspace() {
                     to={`/p/${project.id}/step/${s}`}
                     className="flex items-center gap-4 rounded-xl border border-navy-100 p-3 transition-colors hover:border-teal-400 hover:bg-teal-50/40"
                     data-testid={`ws-step-${s}`}
+                    data-status={ev.status}
                   >
-                    <span
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-                        st === 'complete' ? 'bg-teal-500 text-white' : st === 'progress' ? 'bg-gold-400 text-navy-950' : 'bg-navy-100 text-navy-700'
-                      }`}
-                    >
-                      {st === 'complete' ? <Check className="h-5 w-5" /> : i + 1}
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${STATE_CIRCLE[st]}`}>
+                      <StateIcon state={st} n={i + 1} className="h-5 w-5" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-baseline gap-x-2">
@@ -88,9 +86,9 @@ export function Workspace() {
                         <span className="text-xs text-navy-700/70">{t(`ask.${s}`)}</span>
                       </span>
                       <span className="mt-1.5 flex items-center gap-2">
-                        <ProgressBar value={(met / crit.length) * 100} className="h-1.5 max-w-[200px] flex-1" tone={st === 'complete' ? 'teal' : 'gold'} />
-                        <span className="text-xs text-navy-700">
-                          {st === 'complete' ? t('ws.complete') : st === 'progress' ? t('shell.stepIncomplete', { n: met, total: crit.length }) : t('ws.notStarted')}
+                        <ProgressBar value={(met / crit.length) * 100} className="h-1.5 max-w-[200px] flex-1" tone={st === 'complete' || st === 'limited' ? 'teal' : 'gold'} />
+                        <span className={`text-xs ${st === 'needs-evidence' ? 'font-semibold text-amber-800' : 'text-navy-700'}`}>
+                          {st === 'progress' ? t('shell.stepIncomplete', { n: met, total: crit.length }) : st === 'empty' ? t('ws.notStarted') : t(`eval.${ev.status}`)}
                         </span>
                       </span>
                     </span>

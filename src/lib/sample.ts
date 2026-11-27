@@ -76,17 +76,26 @@ export function buildSampleProject(): Project {
   const b4 = add(null, 'Pumping test procedure and measurement')
   const i41 = add(b4, 'Was the pumping test carried out and recorded to the specification?')
   const i42 = add(b4, 'Was the flow and water-level measuring equipment accurate?')
-  p.structure.nodes = nodes
+  p.structure.nodes = nodes.map((n) => ({ ...n, kind: 'driver' as const }))
   p.structure.treeType = 'issue'
   p.structure.mece = {
     overlap: { answer: 'no', note: 'Natural conditions, design, construction and testing are separate stages of the well’s life.' },
     missing: { answer: 'no', note: 'Checked with the hydrogeologist: every possible cause falls in one of the four branches.' },
     logic: { answer: 'yes', note: 'Level 1 follows the life cycle of the well; level 2 asks one question per factor.' },
     contributes: { answer: 'yes', note: 'Each branch could explain the shortfall.' },
+    causes: { answer: 'yes', note: 'All branches are possible causes. The low yield itself (the symptom) is in the problem statement; unmet demand (a consequence) is under “why it matters”.' },
+    treeType: { answer: 'yes', note: 'An issue tree: the sub-issues are written as questions to investigate.' },
+  }
+  p.structure.review = {
+    overlaps: 'None found after re-reading each pair of branches. “Development” (3.1) and “screen position” (2.1) were checked: one is a construction activity, the other a design decision.',
+    missing: 'Considered “energy supply to the test pump” — placed under 4.2 (measuring and test equipment) rather than as a new branch.',
+    corrections: 'Moved “unmet community demand” out of the tree: it is a consequence and belongs under “why it matters”.',
+    reviewer: 'Hydrogeologist (illustrative)',
+    comments: 'Illustrative review record. Re-review if the retest changes the picture.',
   }
   p.structure.meceStatus = 'accepted'
   p.structure.meceReviewedAt = new Date().toISOString()
-  p.structure.meceSignature = treeSignature(d.question, nodes)
+  p.structure.meceSignature = treeSignature(d.question, p.structure.nodes)
   p.structure.hypothesis = {
     initial: 'The shortfall may originate in the well itself (construction, development or testing) rather than in the aquifer — a hypothesis to be tested, not assumed.',
     rationale: 'Illustrative: the survey described a water-bearing formation at this site, and the records raise questions about development and test procedure.',
@@ -225,11 +234,13 @@ export function buildSampleProject(): Project {
   /* ---- Step 6: Synthesis ---- */
   const f1 = Object.assign(newFinding(), {
     discovery: 'The pumping test did not fully follow the specification (recovery under-measured, interruptions recorded).',
-    insight: 'Because the pumping test was incomplete, the shortfall cannot yet be attributed to the aquifer, so a properly supervised retest is needed before any decision to abandon or redesign the well.',
+    insight: 'Because the pumping test was incomplete, the shortfall cannot yet be attributed to the aquifer — a properly supervised retest is needed before any decision to abandon or redesign the well.',
     implication: 'Do not abandon or redesign the well until a valid test is available.',
     meaning: 'The current yield figure is indicative only.',
     whyMatters: 'Abandoning a potentially good well, or redesigning on the basis of a flawed test, would waste funds.',
     uncertain: 'Whether a valid test would show a different yield.',
+    decision: 'Postpone any decision to abandon or redesign; commission a supervised retest first.',
+    priorBelief: 'The team initially assumed the aquifer was the cause because the yield was low.',
     analysisIds: [a1.id],
     evidenceIds: [e1.id, e2.id],
   })
@@ -240,6 +251,8 @@ export function buildSampleProject(): Project {
     meaning: 'One plausible, fixable cause has been identified but not confirmed.',
     whyMatters: 'If confirmed, the problem may be solvable without a new borehole.',
     uncertain: 'Screen condition is unknown; the effect of short development on yield is still an assumption.',
+    decision: 'Add a camera inspection and re-development before the retest — a cheap step that could change the whole decision.',
+    priorBelief: 'Development was assumed to have followed the specification.',
     analysisIds: [a2.id],
     evidenceIds: [e3.id, e4.id],
   })

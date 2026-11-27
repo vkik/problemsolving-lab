@@ -33,7 +33,11 @@ Problem → Issues → Priorities → Work plan → Analyses (evidence) → Find
 - **Step 2, Structure.** Issue tree builder:
   - Unlimited levels; add, edit, delete, reorder, indent/outdent, and collapse/expand branches. Keyboard: Enter adds a sibling, Tab indents, Shift+Tab outdents.
   - A visual tree, exportable as PNG or SVG, with an issue-tree vs. hypothesis-tree choice.
-  - **Guided MECE review.** It cannot be accepted until all four questions have the MECE-consistent answer, and it is flagged again if the tree changes afterwards.
+  - **Guided structure review (MECE).** Six questions: relevance, mutually exclusive, collectively exhaustive, consistent logic, causes vs. symptoms and consequences, and tree type. Each comes with an explanation and automatic observations (near-duplicate siblings, single-child branches, too many siblings, mixed questions and statements, tagged symptoms or consequences, content that doesn't match the tree type).
+  - The observations never answer a question. Acceptance stays a documented human judgement: it needs all six consistent answers, and it is flagged again if the tree changes afterwards.
+  - A **review record**: overlaps found, missing areas, corrections made, reviewer and comments. It is shown in the report.
+  - A **role** for each branch: driver/component, root cause, contributing factor, symptom or consequence.
+  - A side-by-side note on **issue trees vs. hypothesis trees**, to help choose the right one.
   - Fields for the hypothesis, rationale, alternatives and unknowns.
 - **Step 3, Prioritize.** Low/Medium/High impact and feasibility with a written rationale.
   - A 1–9 score and a 3×3 matrix.
@@ -49,13 +53,38 @@ Problem → Issues → Priorities → Work plan → Analyses (evidence) → Find
   - Correlation vs. causation, limitations, missing information and a revised hypothesis.
   - **An assumption can never silently become a verified fact.** Re-classifying requires a recorded verification, and imports enforce the same rule.
 - **Step 6, Synthesis.**
-  - One-sentence *insight + implication* per finding, with warnings for multi-sentence or implication-free synthesis.
-  - Findings linked to analyses and evidence, with warnings for weak or untested support.
+  - A **data → finding → insight → implication → so what? → decision relevance** ladder, with definitions, prompts, an illustrative worked example and a seven-question worksheet. Each finding is written rung by rung, with an optional note on what you believed before the analysis.
+  - The Forward playbook's one-sentence *insight + implication*, with a *“Because …, …”* draft built only from your own words. Warnings flag multi-sentence synthesis, a missing implication, or an insight that only restates the finding.
+  - **Evidence class** for every finding, always shown with its reasons:
+    - *verified*: tested and strongly evidenced, no reservations;
+    - *partially supported*: tested and strongly evidenced, with reservations;
+    - *preliminary*: not tested, or only assumptions or interpretations;
+    - *inconclusive*: the analyses were inconclusive;
+    - *unsupported claim*: no links, or links with nothing recorded.
+  - An **evidence-quality panel** for each finding (reliability, accuracy, completeness, recency, confidence) and whether each analysis documents its limitations.
   - The four-question **So what?** test and ranked insights.
 - **Step 7, Recommendations.**
   - All required fields, time horizons (immediate, short, medium, long term), and recommended / further investigation / rejected-with-justification.
-  - Full traceability: Recommendation → Finding → Evidence.
-- **Executive report.** It compiles all seven steps into eleven sections in English or Arabic, independently of the interface language. Print it or save it as PDF, and export it as a JSON backup.
+  - Full traceability: Recommendation → Finding → Analysis → Evidence, including the **issues addressed** and the **limitations affecting** each action.
+  - A state for each action, with its reason: *evidence-backed*, *partially supported*, *precautionary*, *requires further investigation* or *unsupported*. An action is never shown as evidence-backed when its chain is broken.
+  - **Precautionary actions** are allowed when explicitly marked and justified.
+- **Evidence-based completion.** Each step is *Complete*, *Complete with documented limitations*, *Needs further evidence* or *Incomplete*. A quality-check list shows why. Documented uncertainty is accepted; unsupported claims are not counted as complete. The screens separate what you enter, automatic validation, the methodological review and the completion status.
+- **Reliable saving.** Edits are written to storage immediately, one write at a time. The header shows *Saving…*, *Unsaved changes*, *Saved — all changes stored on this device*, *Save failed — retrying* or *Retry required*. *Saved* appears only after storage confirms the write.
+  - If the browser refuses a write (storage full or blocked), the change is kept in the tab and retried automatically (after 1, 3, 10 and 30 s).
+  - A **recovery copy** is kept in `localStorage` while a change is unsaved after a failure, and when the tab is hidden or closed with pending changes. On the next start, a copy newer than storage is restored and saved again, with a notice naming the project.
+  - A banner offers *Retry now* and *Export backup*, and says whether the recovery copy could be stored. The app asks for confirmation before you close a tab with unsaved changes.
+- **Backup and storage protection.** Projects live only on the device, so the dashboard has a *Backup and storage* panel:
+  - It shows the last backup, how many projects have changes not in any backup, and whether the browser protects the storage from being cleared (with a button to ask for protection).
+  - *Share backup* sends the file straight to Google Drive, WhatsApp or email on phones that support it; *Download backup* works everywhere.
+  - A reminder appears when a project has gone a week with changes outside any backup. *Later* hides it for three days.
+  - Imported projects count as backed up, since they came from a file.
+- **Executive report.** It compiles all seven steps into thirteen sections in English or Arabic, independently of the interface language:
+  - an evidence register grouped by class (facts, observations, external evidence, assumptions, interpretations);
+  - verified conclusions kept apart from partially supported, preliminary and inconclusive findings;
+  - a reasoning chain for every recommendation;
+  - an implementation plan, and risks and outstanding questions.
+
+  Print it or save it as PDF, and export it as a JSON backup.
 - **Coaching on every step.**
   - Purpose, method, expected output, a practical example, common mistakes, guiding questions, a quality checklist and completion criteria.
   - **Think Deeper**: you write your own answer before the coaching prompt is revealed.
@@ -82,7 +111,8 @@ npm run dev          # http://localhost:5173/problemsolving-lab/
 | `npm run preview` | Serve the production build on port 4173 |
 | `npm test` | Unit tests (Vitest) |
 | `npm run test:e2e` | End-to-end acceptance tests (Playwright; builds and serves automatically) |
-| `npm run lint` | Lint with oxlint |
+| `npm run lint` | Lint with [oxlint](https://oxc.rs) (used instead of ESLint: one dev dependency, no plugin set; CI fails on errors) |
+| `npm run typecheck` | TypeScript project check without emitting |
 
 ## Deployment (GitHub Pages)
 
@@ -90,10 +120,12 @@ Deployment is automated by `.github/workflows/deploy.yml`.
 
 1. Push this project to a GitHub repository, for example `problemsolving-lab`.
 2. In the repository, open **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions** (one-time setting).
-3. Push to `main`. The workflow:
-   - runs type-checking, unit tests and the Playwright acceptance tests;
-   - builds with `BASE_PATH=/<repository-name>/`;
-   - deploys `dist/` to Pages.
+3. Push to `main`. The workflow (`.github/workflows/deploy.yml`):
+   - **quality** job: lint, type-check, unit tests and the production build (with `BASE_PATH=/<repository-name>/`);
+   - **e2e** job: Playwright acceptance tests in Chromium;
+   - **deploy** job: publishes `dist/` to Pages, only on pushes to `main` and only if both other jobs passed.
+
+   Pull requests run the quality and e2e jobs, including the production build, but never deploy. On failure, the Playwright report and traces (or the unit-test JUnit report) are kept as artifacts for 14 days.
 4. The site is published at `https://<user>.github.io/<repository-name>/`.
 
 The base path is derived from the repository name, so a renamed repository keeps working. Local builds default to `/problemsolving-lab/`; override with `BASE_PATH=/other/ npm run build`.
@@ -106,7 +138,10 @@ To test the live site: `E2E_BASE_URL=https://<user>.github.io/problemsolving-lab
 |------|-------|
 | Interface text | `src/i18n/en.ts` and `src/i18n/ar.ts`. The Arabic file is type-checked against the English keys, so a missing translation fails the build. |
 | Coaching content (method, examples, mistakes, checklists, Think Deeper) | `src/content/coaching.ts` |
-| Completion criteria | logic in `src/lib/progress.ts`, labels in `src/content/criteria.ts` |
+| Completion criteria and states | logic in `src/lib/progress.ts`, labels in `src/content/criteria.ts` (`CRITERIA`, `CHECKS`) |
+| Evidence-chain rules (finding support, recommendation chains, analysis warnings) | `src/lib/evidence.ts` |
+| Structure review observations | `src/lib/structureChecks.ts` |
+| Saving, retries, tab lifecycle | `src/lib/saveQueue.ts`, `src/lib/lifecycle.ts`, `src/store/projects.ts` |
 | SMART hint rules | `src/lib/smart.ts` |
 | Data model | `src/lib/types.ts`, documented in [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) |
 | Changing the data model | bump `SCHEMA_VERSION` in `types.ts` and add a step to `migrate()` in `src/lib/migrate.ts`. Old stored projects and backups are upgraded on load. |
@@ -114,7 +149,7 @@ To test the live site: `E2E_BASE_URL=https://<user>.github.io/problemsolving-lab
 | Each step’s screen | `src/steps/*.tsx` |
 | Report | `src/pages/ReportPage.tsx` |
 
-After any change: `npm run test:all`, then push to `main`.
+Before opening a pull request, run `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:e2e` and `npm run build`. Every defect fix comes with a regression test (see `docs/TESTING.md`).
 
 ## Project structure
 
@@ -131,10 +166,21 @@ tests/e2e/     Playwright acceptance tests
 docs/          data model and testing report
 ```
 
+## Known limitations
+
+- **Closing the tab.** Saving starts on every edit; the app flushes and takes a recovery copy when the tab is hidden or closed. A browser may still abort an IndexedDB write started while the page is closing; this is not guaranteed by any web app. The synchronous recovery copy is the safety net.
+- **Recovery copy size.** It lives in `localStorage` (about 5 MB per site in most browsers). If that is full too, the banner says so; export a backup.
+- **Heuristics.** Structure observations and SMART hints use keywords and word overlap. They prompt reflection and never decide.
+- **No sync.** Projects live in one browser; use backups to move them.
+
+See [`docs/TESTING.md`](docs/TESTING.md) for the full list.
+
 ## Data and privacy
 
 - Projects are stored in **IndexedDB in your browser on your device**; the interface language is stored in LocalStorage. Nothing is transmitted anywhere.
-- Every edit is saved immediately. The app also requests persistent storage so the browser will not evict data under pressure.
+- Every edit is saved immediately, and the app requests persistent storage so the browser will not evict data under pressure.
+- **If saving fails:** your changes stay in the open tab and are retried automatically. A red banner says how many projects are unsaved and offers *Retry now* and *Export backup*. Keep the tab open until it says “All changes saved”.
+- **Limit:** the app saves as soon as the tab is hidden and warns before you close it with unsaved changes. But no web app can guarantee that a write started while a tab is closing will finish.
 - **Back up regularly** using *Back up all projects* (dashboard) or *Export JSON backup* (workspace or report). Clearing browser data deletes local projects.
 - Imported files are fully validated (see `docs/DATA_MODEL.md`). Nothing in an imported file is executed or rendered as HTML.
 

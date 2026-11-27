@@ -1,8 +1,11 @@
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
-import { useT } from '../i18n'
+import { useState } from 'react'
+import { ArrowDown, ArrowUp, Plus, Trash2, Wand2 } from 'lucide-react'
+import { useT, type TFn } from '../i18n'
 import { newFinding } from '../lib/factory'
 import { deleteFinding, rankedFindings } from '../lib/integrity'
 import { allEvidence } from '../lib/progress'
+import { findingSupport, type FindingClass, type FindingSupport } from '../lib/evidence'
+import { similarity } from '../lib/structureChecks'
 import type { Finding, Project } from '../lib/types'
 import type { StepProps } from '../pages/StepPage'
 import { confirmDialog, Empty, LinkPicker, Notice, TextField } from '../components/ui'
@@ -15,71 +18,249 @@ export function sentenceCount(text: string): number {
     .filter((s) => s.trim().length > 0).length
 }
 
-export function findingWarnings(f: Finding, p: Project): string[] {
+/** Writing-quality warnings for a finding. Evidence strength is shown separately (SupportBadge). */
+export function findingWarnings(f: Finding): string[] {
   const w: string[] = []
   if (f.insight.trim() && sentenceCount(f.insight) > 1) w.push('syn.warn.multiSentence')
   if (f.insight.trim() && !f.implication.trim()) w.push('syn.warn.noImplication')
   if (f.analysisIds.length === 0 && f.evidenceIds.length === 0) w.push('syn.warn.notLinked')
-  const ev = allEvidence(p).filter((x) => f.evidenceIds.includes(x.evidence.id))
-  if (ev.length > 0 && ev.every((x) => x.evidence.type === 'assumption' || x.evidence.type === 'interpretation')) w.push('syn.warn.weakEvidence')
-  const an = p.analyses.filter((a) => f.analysisIds.includes(a.id))
-  if (an.some((a) => a.result === 'not-tested' || a.result === 'inconclusive')) w.push('syn.warn.untested')
+  if (f.discovery.trim() && ((f.meaning.trim() && similarity(f.discovery, f.meaning) >= 0.7) || (f.insight.trim() && similarity(f.discovery, f.insight) >= 0.8)))
+    w.push('syn.warn.restates')
   return w
+}
+
+export const SUPPORT_STYLE: Record<FindingClass, string> = {
+  verified: 'bg-teal-600 text-white',
+  partial: 'bg-teal-100 text-teal-800',
+  preliminary: 'bg-gold-100 text-gold-600',
+  inconclusive: 'bg-amber-100 text-amber-900',
+  unsupported: 'bg-red-50 text-red-700',
+}
+
+/** Shows how well a finding is supported — always with the reason. Shared by synthesis, recommendations and the report. */
+export function SupportBadge({ support, t }: { support: FindingSupport; t: TFn }) {
+  const flagged = support.cls !== 'verified'
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1" data-testid="support-badge" data-level={support.cls} title={t(`sup.d.${support.cls}`)}>
+      <span className={`badge ${SUPPORT_STYLE[support.cls]}`}>{t(`sup.${support.cls}`)}</span>
+      {flagged && (
+        <span className={`text-[11px] ${support.documented || support.cls === 'unsupported' ? 'text-navy-700' : 'font-semibold text-amber-800'}`}>
+          {support.cls !== 'unsupported' && <>{support.documented ? t('sup.documented') : t('sup.undocumented')} · </>}
+          {t('sup.why')} {support.reasons.map((r) => t(`sup.r.${r}`)).join('; ')}
+        </span>
+      )}
+    </span>
+  )
+}
+
+/** Contextual evidence-quality checks for one finding (analytical validation). */
+export function EvidenceQuality({ support, t }: { support: FindingSupport; t: TFn }) {
+  const names = (list: { title: string; hypothesis: string }[]) => list.map((a) => a.title || a.hypothesis || '…').join('; ')
+  return (
+    <div className="rounded-lg border border-navy-100 bg-navy-50/60 p-3" data-testid="evidence-quality">
+      <p className="mb-0.5 flex items-center gap-2 text-xs font-semibold text-navy-900">
+        <span className="badge bg-navy-900 text-white">{t('val.kind')}</span>
+        {t('val.title')}
+      </p>
+      <p className="mb-2 text-[11px] text-navy-700">{t('val.intro')}</p>
+      {support.evidence.length === 0 ? (
+        <p className="text-xs text-navy-700">{t('val.noEvidence')}</p>
+      ) : (
+        <ul className="grid gap-1 text-xs sm:grid-cols-2">
+          {support.quality.map((q) => (
+            <li key={q.key} className={q.low > 0 ? 'font-semibold text-amber-900' : 'text-navy-800'} data-testid={`quality-${q.key}`}>
+              {t(`an.q.${q.key}`)}: {t('val.counts', { high: q.high, medium: q.medium, low: q.low, unrated: q.unrated })}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs font-semibold text-navy-900">{t('val.limitations')}</p>
+      <p className="text-xs text-navy-800" dir="auto">
+        {support.limitationsDocumented.length === 0 && support.limitationsMissing.length === 0 && t('val.limitationsNone')}
+        {support.limitationsDocumented.length > 0 && t('val.limitationsOk', { list: names(support.limitationsDocumented) })}
+        {support.limitationsMissing.length > 0 && <span className="ms-1 font-semibold text-amber-900">{t('val.limitationsMissing', { list: names(support.limitationsMissing) })}</span>}
+      </p>
+    </div>
+  )
+}
+
+const LEVELS = [1, 2, 3, 4, 5, 6] as const
+const QUESTIONS = [1, 2, 3, 4, 5, 6, 7] as const
+
+/** The five rungs from data to decision, with an illustrative example. */
+export function SynthesisLadder() {
+  const { t } = useT()
+  const [example, setExample] = useState(false)
+  return (
+    <section className="card card-pad" data-testid="synthesis-ladder">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="section-title">{t('ladder.title')}</h2>
+          <p className="text-sm text-navy-700">{t('ladder.intro')}</p>
+        </div>
+        <button className="btn-ghost py-1" onClick={() => setExample((v) => !v)} aria-expanded={example} data-testid="ladder-example">
+          {example ? t('ladder.hideExample') : t('ladder.example')}
+        </button>
+      </div>
+      <ol className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        {LEVELS.map((n) => (
+          <li key={n} className={`rounded-lg border p-3 ${n >= 3 ? 'border-gold-400/60 bg-gold-100/30' : 'border-navy-100 bg-navy-50/60'}`}>
+            <p className="text-xs font-bold text-teal-700">
+              {n}. {t(`ladder.l${n}`)}
+            </p>
+            <p className="mt-1 text-xs leading-snug text-navy-800">{t(`ladder.d${n}`)}</p>
+            {example && (
+              <p className="mt-2 border-t border-navy-100 pt-2 text-xs italic leading-snug text-navy-900" data-testid={`ladder-ex-${n}`}>
+                {t(`ladder.ex${n}`)}
+              </p>
+            )}
+          </li>
+        ))}
+      </ol>
+      {example && (
+        <div className="mt-3 rounded-lg border-s-4 border-gold-500 bg-gold-100/40 p-3 text-sm text-navy-900">
+          {t('ladder.exSentence')} <span className="text-xs text-navy-700">({t('ladder.exNote')})</span>
+        </div>
+      )}
+      <details className="mt-3 rounded-lg border border-navy-100 bg-white" data-testid="synthesis-worksheet">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-navy-900">{t('ladder.worksheet')}</summary>
+        <div className="border-t border-navy-100 px-3 py-2 text-sm text-navy-800">
+          <ol className="list-decimal space-y-1 ps-5">
+            {QUESTIONS.map((n) => (
+              <li key={n}>{t(`ladder.q${n}`)}</li>
+            ))}
+          </ol>
+          <p className="mt-2 text-xs text-navy-700">{t('ladder.becauseAid')}</p>
+          <p className="mt-1 text-xs text-navy-700">{t('ladder.noAuto')}</p>
+        </div>
+      </details>
+    </section>
+  )
+}
+
+function Rung({ n, title, prompt, children }: { n: number; title: string; prompt: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2 border-t border-navy-100 pt-4 md:grid-cols-[160px_minmax(0,1fr)]">
+      <div>
+        <p className="text-xs font-bold text-teal-700">
+          {n} · {title}
+        </p>
+        <p className="mt-0.5 text-xs text-navy-700">{prompt}</p>
+      </div>
+      <div className="min-w-0">{children}</div>
+    </div>
+  )
 }
 
 function FindingCard({ f, index, project, update }: StepProps & { f: Finding; index: number }) {
   const { t } = useT()
   const set = (patch: Partial<Finding>) => update((p) => void Object.assign(p.synthesis.findings.find((x) => x.id === f.id)!, patch))
-  const warnings = findingWarnings(f, project)
+  const warnings = findingWarnings(f)
+  const support = findingSupport(project, f)
   const onDelete = async () => {
     const ok = await confirmDialog({ title: t('common.delete'), body: t('syn.deleteBody'), confirmLabel: t('common.delete'), danger: true })
     if (ok) update((p) => deleteFinding(p, f.id))
   }
+  const draft = async () => {
+    const insight = f.meaning.trim().replace(/[.。؛;]+$/u, '')
+    const implication = f.implication.trim().replace(/[.。؛;]+$/u, '')
+    if (!insight || !implication) return
+    // Lower-case a leading capital only when the next letter is lower-case ("The test…" → "the test…").
+    const soften = (x: string) => (/^[A-Z][a-z]/.test(x) ? x[0].toLowerCase() + x.slice(1) : x)
+    const text = t('syn.becauseTpl', { insight: soften(insight), implication: soften(implication) })
+    if (f.insight.trim()) {
+      const ok = await confirmDialog({ title: t('syn.draftSentence'), body: t('statement.replaceConfirm') })
+      if (!ok) return
+    }
+    set({ insight: text })
+  }
+  const linkedResults = support.analyses.filter((a) => a.results.trim())
   return (
     <article className="card card-pad" data-testid="finding-card">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <h3 className="font-semibold text-navy-900">{t('syn.finding', { n: index + 1 })}</h3>
-        <button className="btn-icon hover:text-red-700" onClick={onDelete} aria-label={t('common.delete')}>
+        <SupportBadge support={support} t={t} />
+        <button className="btn-icon ms-auto hover:text-red-700" onClick={onDelete} aria-label={t('common.delete')}>
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <TextField className="md:col-span-2" label={t('syn.discovery')} value={f.discovery} onChange={(v) => set({ discovery: v })} multiline testId="finding-discovery" />
-        <LinkPicker
-          label={t('syn.linkAnalyses')}
-          selected={f.analysisIds}
-          onChange={(ids) => set({ analysisIds: ids })}
-          empty={t('syn.noAnalyses')}
-          testId="link-analyses"
-          options={project.analyses.map((a) => ({
-            id: a.id,
-            label: <span dir="auto">{a.title || a.hypothesis || '…'}</span>,
-            sub: <span className={`badge ${RESULT_STYLE[a.result]}`}>{t(`an.r.${a.result}`)}</span>,
-          }))}
-        />
-        <LinkPicker
-          label={t('syn.linkEvidence')}
-          selected={f.evidenceIds}
-          onChange={(ids) => set({ evidenceIds: ids })}
-          empty={t('syn.noAnalyses')}
-          testId="link-evidence"
-          options={allEvidence(project).map(({ evidence: e, analysis: a }) => ({
-            id: e.id,
-            label: <span dir="auto">{e.description || '…'}</span>,
-            sub: (
-              <span className="flex flex-wrap items-center gap-1">
-                <span className={`badge ${EVIDENCE_STYLE[e.type]}`}>{t(`an.et.${e.type}`)}</span>
-                <span dir="auto">{a.title || a.hypothesis}</span>
-              </span>
-            ),
-          }))}
-        />
-        <TextField label={t('syn.meaning')} value={f.meaning} onChange={(v) => set({ meaning: v })} multiline />
-        <TextField label={t('syn.whyMatters')} value={f.whyMatters} onChange={(v) => set({ whyMatters: v })} multiline />
-        <TextField label={t('syn.implication')} value={f.implication} onChange={(v) => set({ implication: v })} multiline testId="finding-implication" />
-        <TextField label={t('syn.uncertain')} value={f.uncertain} onChange={(v) => set({ uncertain: v })} multiline />
-        <div className="md:col-span-2 rounded-lg border-s-4 border-gold-500 bg-gold-100/40 p-3">
+      <div className="space-y-4">
+        <Rung n={1} title={t('ladder.l1')} prompt={t('syn.l1.prompt')}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <LinkPicker
+              label={t('syn.linkAnalyses')}
+              selected={f.analysisIds}
+              onChange={(ids) => set({ analysisIds: ids })}
+              empty={t('syn.noAnalyses')}
+              testId="link-analyses"
+              options={project.analyses.map((a) => ({
+                id: a.id,
+                label: <span dir="auto">{a.title || a.hypothesis || '…'}</span>,
+                sub: <span className={`badge ${RESULT_STYLE[a.result]}`}>{t(`an.r.${a.result}`)}</span>,
+              }))}
+            />
+            <LinkPicker
+              label={t('syn.linkEvidence')}
+              selected={f.evidenceIds}
+              onChange={(ids) => set({ evidenceIds: ids })}
+              empty={t('syn.noAnalyses')}
+              testId="link-evidence"
+              options={allEvidence(project).map(({ evidence: e, analysis: a }) => ({
+                id: e.id,
+                label: <span dir="auto">{e.description || '…'}</span>,
+                sub: (
+                  <span className="flex flex-wrap items-center gap-1">
+                    <span className={`badge ${EVIDENCE_STYLE[e.type]}`}>{t(`an.et.${e.type}`)}</span>
+                    <span dir="auto">{a.title || a.hypothesis}</span>
+                  </span>
+                ),
+              }))}
+            />
+          </div>
+          {linkedResults.length > 0 && (
+            <div className="mt-2 rounded-md bg-navy-50 p-2 text-xs text-navy-800">
+              <p className="font-semibold">{t('syn.linkedResults')}</p>
+              <ul className="mt-0.5 space-y-0.5">
+                {linkedResults.map((a) => (
+                  <li key={a.id} dir="auto">
+                    • {a.results}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="mt-3">
+            <EvidenceQuality support={support} t={t} />
+          </div>
+        </Rung>
+        <Rung n={2} title={t('ladder.l2')} prompt={t('syn.l2.prompt')}>
+          <TextField label={t('syn.discovery')} value={f.discovery} onChange={(v) => set({ discovery: v })} multiline testId="finding-discovery" />
+        </Rung>
+        <Rung n={3} title={t('ladder.l3')} prompt={t('syn.l3.prompt')}>
+          <TextField label={t('syn.meaning')} value={f.meaning} onChange={(v) => set({ meaning: v })} multiline testId="finding-meaning" />
+          <TextField className="mt-3" label={t('val.priorBelief')} value={f.priorBelief} onChange={(v) => set({ priorBelief: v })} multiline testId="finding-prior" />
+        </Rung>
+        <Rung n={4} title={t('ladder.l4')} prompt={t('syn.l4.prompt')}>
+          <TextField label={t('syn.implication')} value={f.implication} onChange={(v) => set({ implication: v })} multiline testId="finding-implication" />
+        </Rung>
+        <Rung n={5} title={t('ladder.l5')} prompt={t('syn.l5.prompt')}>
+          <TextField label={t('syn.whyMatters')} value={f.whyMatters} onChange={(v) => set({ whyMatters: v })} multiline testId="finding-whymatters" />
+        </Rung>
+        <Rung n={6} title={t('ladder.l6')} prompt={t('syn.l6.prompt')}>
+          <TextField label={t('syn.decision')} value={f.decision} onChange={(v) => set({ decision: v })} multiline testId="finding-decision" />
+        </Rung>
+        <div className="border-t border-navy-100 pt-4">
+          <TextField label={t('syn.uncertain')} value={f.uncertain} onChange={(v) => set({ uncertain: v })} multiline testId="finding-uncertain" />
+        </div>
+        <div className="rounded-lg border-s-4 border-gold-500 bg-gold-100/40 p-3">
           <TextField label={t('syn.insight')} value={f.insight} onChange={(v) => set({ insight: v })} placeholder={t('syn.insightPh')} multiline testId="finding-insight" />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button className="btn-secondary max-w-full whitespace-normal py-1 text-start" onClick={draft} disabled={!f.meaning.trim() || !f.implication.trim()} data-testid="draft-sentence">
+              <Wand2 className="h-4 w-4" />
+              {t('syn.draftSentence')}
+            </button>
+            <span className="text-xs text-navy-700">{t('syn.draftNote')}</span>
+          </div>
         </div>
       </div>
       {warnings.length > 0 && (
@@ -112,6 +293,7 @@ export function SynthesisStep({ project, update }: StepProps) {
 
   return (
     <>
+      <SynthesisLadder />
       <div className="flex items-center justify-between">
         <h2 className="section-title">{t('syn.title')}</h2>
         <button className="btn-primary" onClick={() => update((p) => void p.synthesis.findings.push(newFinding()))} data-testid="add-finding">
@@ -142,9 +324,14 @@ export function SynthesisStep({ project, update }: StepProps) {
             {ranked.map((f, i) => (
               <li key={f.id} className="flex items-start gap-3 rounded-lg border border-navy-100 p-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-500 text-xs font-bold text-navy-950">{i + 1}</span>
-                <p className="flex-1 text-sm text-navy-900" dir="auto">
-                  {f.insight || f.discovery || '…'}
-                </p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-navy-900" dir="auto">
+                    {f.insight || f.discovery || '…'}
+                  </p>
+                  <div className="mt-1">
+                    <SupportBadge support={findingSupport(project, f)} t={t} />
+                  </div>
+                </div>
                 <button className="btn-icon" disabled={i === 0} onClick={() => move(f.id, -1)} aria-label={t('common.moveUp')}>
                   <ArrowUp className="h-4 w-4" />
                 </button>
@@ -169,8 +356,11 @@ export function SynthesisOutput({ project }: { project: Project }) {
       {ranked.map((f, i) => (
         <li key={f.id} className="flex gap-2">
           <span className="font-bold text-gold-600">{i + 1}.</span>
-          <span className="text-navy-900" dir="auto">
-            {f.insight}
+          <span className="min-w-0">
+            <span className="text-navy-900" dir="auto">
+              {f.insight}
+            </span>{' '}
+            <SupportBadge support={findingSupport(project, f)} t={t} />
           </span>
         </li>
       ))}

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { useT, type TFn } from '../i18n'
 import { labelMap } from '../lib/tree'
+import { analysisWarnings } from '../lib/evidence'
 import { newAnalysis, newEvidence } from '../lib/factory'
 import { deleteAnalysis, deleteEvidence } from '../lib/integrity'
 import {
@@ -37,17 +38,7 @@ export const EVIDENCE_STYLE: Record<EvidenceType, string> = {
   external: 'bg-navy-50 text-navy-700',
 }
 
-const WEAK: EvidenceType[] = ['assumption', 'interpretation']
-
-/** Integrity warnings for an analysis — shown in the lab and the report. */
-export function analysisWarnings(a: Analysis): string[] {
-  const w: string[] = []
-  if (a.result !== 'not-tested' && a.evidence.length === 0) w.push('an.warn.resultNoEvidence')
-  if ((a.result === 'supported' || a.result === 'partially-supported') && a.evidence.length > 0 && a.evidence.every((e) => WEAK.includes(e.type)))
-    w.push('an.warn.supportedOnAssumptions')
-  if (a.relationship === 'causal-supported' && !a.evidence.some((e) => e.type === 'fact' || e.type === 'observation')) w.push('an.warn.causalNoFacts')
-  return w
-}
+export { analysisWarnings } from '../lib/evidence'
 
 function EvidenceItem({ ev, onChange, onDelete, t }: { ev: Evidence; onChange: (patch: Partial<Evidence>) => void; onDelete: () => void; t: TFn }) {
   const changeType = async (type: EvidenceType) => {

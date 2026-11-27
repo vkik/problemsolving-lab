@@ -7,9 +7,13 @@
  *   → Findings (analysisIds, evidenceIds) → Recommendations (findingIds)
  *
  * Bump SCHEMA_VERSION and add a migration in migrate.ts whenever this shape changes.
+ *
+ * v2 (ProblemSolving Lab 1.1): IssueNode.kind; Recommendation.precautionary and
+ * precautionaryJustification; two extra structure-review questions (causes, treeType);
+ * StructureStep.review notes; Finding.decision and Finding.priorBelief.
  */
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export type Lang = 'en' | 'ar'
 
@@ -65,6 +69,10 @@ export interface DefineStep {
 
 export type TreeType = 'issue' | 'hypothesis'
 
+/** How a branch relates to the problem. Symptoms and consequences should not sit where causes belong. */
+export type NodeKind = '' | 'driver' | 'root-cause' | 'contributing' | 'symptom' | 'consequence'
+export const NODE_KINDS: NodeKind[] = ['', 'driver', 'root-cause', 'contributing', 'symptom', 'consequence']
+
 export interface IssueNode {
   id: string
   /** null = child of the central question */
@@ -73,11 +81,16 @@ export interface IssueNode {
   note: string
   order: number
   collapsed: boolean
+  kind: NodeKind
 }
 
 export type MeceAnswer = 'unanswered' | 'yes' | 'no' | 'unsure'
-export type MeceQuestionKey = 'overlap' | 'missing' | 'logic' | 'contributes'
-export const MECE_KEYS: MeceQuestionKey[] = ['overlap', 'missing', 'logic', 'contributes']
+/**
+ * Guided structure review. Display order: relevance, mutually exclusive, collectively exhaustive,
+ * consistent logic, causes vs symptoms/consequences, tree type.
+ */
+export type MeceQuestionKey = 'contributes' | 'overlap' | 'missing' | 'logic' | 'causes' | 'treeType'
+export const MECE_KEYS: MeceQuestionKey[] = ['contributes', 'overlap', 'missing', 'logic', 'causes', 'treeType']
 
 export type MeceStatus = 'not-reviewed' | 'needs-improvement' | 'accepted'
 
@@ -91,12 +104,22 @@ export interface StructureStep {
   meceReviewedAt: string | null
   /** Snapshot of the tree when the review was accepted, to detect later changes. */
   meceSignature: string
+  /** Documented human review: what the reviewer found and decided. */
+  review: StructureReview
   hypothesis: {
     initial: string
     rationale: string
     alternatives: string
     unknowns: string
   }
+}
+
+export interface StructureReview {
+  overlaps: string
+  missing: string
+  corrections: string
+  reviewer: string
+  comments: string
 }
 
 /* ---------- Step 3: Prioritize ---------- */
@@ -196,6 +219,10 @@ export interface Finding {
   meaning: string
   whyMatters: string
   uncertain: string
+  /** Decision relevance: what action, priority or decision could change because of this insight. */
+  decision: string
+  /** What we initially believed that the evidence changed. */
+  priorBelief: string
   analysisIds: string[]
   evidenceIds: string[]
 }
@@ -232,6 +259,9 @@ export interface Recommendation {
   horizon: Horizon
   disposition: Disposition
   rejectionReason: string
+  /** A precautionary action may be recommended without full evidence when explicitly justified. */
+  precautionary: boolean
+  precautionaryJustification: string
 }
 
 /* ---------- Project ---------- */

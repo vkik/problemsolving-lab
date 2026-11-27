@@ -3,7 +3,7 @@ import { duplicateProject, emptyProject, newAnalysis, newEvidence, newFinding, n
 import { addChild, addSiblingAfter, flatten, indent, move, outdent, removeNode, treeSignature } from './tree'
 import { buildBackup, ImportError, parseBackup, sanitizeProject } from './migrate'
 import { deleteAnalysis, deleteFinding, deleteIssue, deleteTask } from './integrity'
-import { completedSteps, projectProgress, rootQuestion, stepComplete, stepCriteria } from './progress'
+import { completedSteps, evaluateStep, projectProgress, rootQuestion, stepComplete } from './progress'
 import { bucketOf, rankedIssues, score } from './priority'
 import { reviewQuestion } from './smart'
 import { buildSampleProject } from './sample'
@@ -121,7 +121,7 @@ describe('import / export safety', () => {
   it('removes dangling references and orphan/cyclic nodes', () => {
     const p = emptyProject()
     const t = treeOf()
-    p.structure.nodes = [...t.nodes, { id: 'orph', parentId: 'missing', text: 'x', note: '', order: 0, collapsed: false }, { id: 'c1', parentId: 'c2', text: '', note: '', order: 0, collapsed: false }, { id: 'c2', parentId: 'c1', text: '', note: '', order: 0, collapsed: false }]
+    p.structure.nodes = [...t.nodes, { id: 'orph', parentId: 'missing', text: 'x', note: '', order: 0, collapsed: false, kind: '' as const }, { id: 'c1', parentId: 'c2', text: '', note: '', order: 0, collapsed: false, kind: '' as const }, { id: 'c2', parentId: 'c1', text: '', note: '', order: 0, collapsed: false, kind: '' as const }]
     p.prioritize.selected = [t.a1, 'ghost']
     const task = newTask('ghost')
     p.workplan.tasks = [task]
@@ -184,17 +184,19 @@ describe('progress and completion criteria', () => {
     p.structure.nodes = addChild(p.structure.nodes, null, 'C').nodes
     expect(stepComplete(p, 'structure')).toBe(false)
   })
-  it('sample project: realistic, partly complete status', () => {
+  it('sample project: four-state evaluation shows documented limitations, not false validation', () => {
     const p = buildSampleProject()
-    const status = Object.fromEntries(STEP_KEYS.map((s) => [s, stepComplete(p, s)]))
-    expect(status.define).toBe(false) // SMART measurable/time-bound only "partly" met
-    expect(status.structure).toBe(true)
-    expect(status.prioritize).toBe(true)
-    expect(status.workplan).toBe(true)
-    expect(status.analyses).toBe(true)
-    expect(status.synthesis).toBe(true)
-    expect(status.recommendations).toBe(true)
-    expect(stepCriteria(p, 'define').find((c) => c.key === 'define.smartMet')?.met).toBe(false)
+    const status = Object.fromEntries(STEP_KEYS.map((s) => [s, evaluateStep(p, s).status]))
+    expect(status).toEqual({
+      define: 'complete-limited', // measurable and time-bound only "partly" met, explained in notes
+      structure: 'complete',
+      prioritize: 'complete-limited', // an issue selected with low confidence
+      workplan: 'complete',
+      analyses: 'complete-limited', // one inconclusive, one not yet tested
+      synthesis: 'complete-limited', // finding 2 is provisional, uncertainty documented
+      recommendations: 'complete-limited', // one action rests on the provisional finding
+    })
+    expect(completedSteps(p)).toBe(7)
   })
 })
 

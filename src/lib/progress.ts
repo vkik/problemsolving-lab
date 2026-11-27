@@ -1,14 +1,37 @@
 /**
- * Completion criteria for each of the seven steps. A step is complete only when the substance is
- * there — e.g. Structure needs a reviewed-and-accepted MECE check, not merely some branches.
+ * Completion of the seven steps.
+ *
+ * Each step has required criteria (substance, not touched fields) and quality checks. The result
+ * is one of four states:
+ *   complete          — criteria met, no quality concerns
+ *   complete-limited  — criteria met; concerns exist but are documented (e.g. stated uncertainty)
+ *   needs-evidence    — criteria met, but something presented as supported is not (yet) backed
+ *   incomplete        — required criteria not met
+ * The rules are deliberately not punitive: documented uncertainty is accepted, not rejected.
  */
 import { flatten, treeSignature } from './tree'
 import { today } from './factory'
+import { analysisWarnings, findingSupport, isJustifiedPrecaution, recommendationChain } from './evidence'
 import { SMART_KEYS, STEP_KEYS, type Project, type StepKey } from './types'
 
 export interface Criterion {
   key: string
   met: boolean
+}
+
+export type StepStatus = 'complete' | 'complete-limited' | 'needs-evidence' | 'incomplete'
+
+export interface QualityIssue {
+  key: string
+  level: 'limitation' | 'needs-evidence'
+  /** Display text of the item concerned (finding, recommendation, criterion…). */
+  item: string
+}
+
+export interface StepEvaluation {
+  status: StepStatus
+  criteria: Criterion[]
+  issues: QualityIssue[]
 }
 
 const filled = (s: string) => s.trim().length > 0
@@ -18,11 +41,14 @@ export function stepCriteria(p: Project, step: StepKey): Criterion[] {
     case 'define': {
       const d = p.define
       const worksheet = [d.background, d.currentSituation, d.desiredSituation, d.gap, d.whyMatters, d.stakeholders, d.scope, d.constraints]
+      const assessed = SMART_KEYS.every((k) => d.smart[k].verdict !== 'unassessed')
       return [
         { key: 'define.question', met: filled(d.question) },
         { key: 'define.worksheet', met: worksheet.filter(filled).length >= 6 },
-        { key: 'define.smartAssessed', met: SMART_KEYS.every((k) => d.smart[k].verdict !== 'unassessed') },
-        { key: 'define.smartMet', met: SMART_KEYS.every((k) => d.smart[k].verdict === 'met') },
+        { key: 'define.smartAssessed', met: assessed },
+        // Both checks only count once every criterion has a verdict — never vacuously.
+        { key: 'define.smartNoneUnmet', met: assessed && SMART_KEYS.every((k) => d.smart[k].verdict !== 'not-met') },
+        { key: 'define.smartPartlyExplained', met: assessed && SMART_KEYS.every((k) => d.smart[k].verdict !== 'partly' || filled(d.smart[k].note)) },
         { key: 'define.statement', met: filled(d.statement) },
       ]
     }
@@ -71,6 +97,7 @@ export function stepCriteria(p: Project, step: StepKey): Criterion[] {
       const sw = p.synthesis.soWhat
       return [
         { key: 'synthesis.findings', met: f.length > 0 && f.every((x) => filled(x.insight) && filled(x.implication)) },
+        { key: 'synthesis.statementInterpretation', met: f.length > 0 && f.every((x) => filled(x.discovery) && filled(x.meaning)) },
         { key: 'synthesis.linked', met: f.length > 0 && f.every((x) => x.evidenceIds.length > 0 || x.analysisIds.length > 0) },
         { key: 'synthesis.soWhat', met: [sw.mostImportant, sw.whyMatters, sw.decision, sw.doNothing].every(filled) },
       ]
@@ -82,15 +109,90 @@ export function stepCriteria(p: Project, step: StepKey): Criterion[] {
         { key: 'recommendations.exists', met: rec.length > 0 },
         { key: 'recommendations.ownerTimeline', met: rec.length > 0 && rec.every((r) => filled(r.owner) && filled(r.deadline)) },
         { key: 'recommendations.kpi', met: rec.length > 0 && rec.every((r) => filled(r.kpi) && filled(r.verification)) },
-        { key: 'recommendations.traceable', met: rec.length > 0 && rec.every((r) => r.findingIds.length > 0) },
+        { key: 'recommendations.traceable', met: rec.length > 0 && rec.every((r) => r.findingIds.length > 0 || isJustifiedPrecaution(r)) },
+        { key: 'recommendations.precautionaryJustified', met: p.recommendations.length > 0 && p.recommendations.every((r) => !r.precautionary || filled(r.precautionaryJustification)) },
         { key: 'recommendations.rejectedJustified', met: p.recommendations.length > 0 && rejected.every((r) => filled(r.rejectionReason)) },
       ]
     }
   }
 }
 
+const label = (s: string, fallback = '…') => (s.trim() || fallback).slice(0, 120)
+
+/** Quality checks beyond the required criteria (see module comment for the levels). */
+export function stepIssues(p: Project, step: StepKey): QualityIssue[] {
+  const out: QualityIssue[] = []
+  switch (step) {
+    case 'define':
+      for (const k of SMART_KEYS) if (p.define.smart[k].verdict === 'partly') out.push({ key: 'define.smartPartly', level: 'limitation', item: k })
+      break
+    case 'structure': {
+      const m = p.structure.mece
+      if (p.structure.meceStatus === 'accepted' && (m.causes.answer === 'unanswered' || m.treeType.answer === 'unanswered'))
+        out.push({ key: 'structure.reviewIncomplete', level: 'limitation', item: '' })
+      break
+    }
+    case 'prioritize':
+      for (const id of p.prioritize.selected)
+        if (p.prioritize.assessments[id]?.confidence === 'low')
+          out.push({ key: 'prioritize.lowConfidence', level: 'limitation', item: label(p.structure.nodes.find((n) => n.id === id)?.text ?? '') })
+      break
+    case 'analyses':
+      for (const a of p.analyses) {
+        const name = label(a.title || a.hypothesis)
+        if (a.result === 'not-tested') {
+          out.push({ key: 'analyses.untested', level: 'limitation', item: name })
+          continue
+        }
+        const w = analysisWarnings(a)
+        if (w.includes('an.warn.supportedOnAssumptions')) out.push({ key: 'analyses.supportedOnAssumptions', level: 'needs-evidence', item: name })
+        if (w.includes('an.warn.causalNoFacts')) out.push({ key: 'analyses.causalNoFacts', level: 'needs-evidence', item: name })
+        if (w.includes('an.warn.lowQuality')) out.push({ key: 'analyses.lowQuality', level: filled(a.limitations) ? 'limitation' : 'needs-evidence', item: name })
+        if (a.result === 'inconclusive') out.push({ key: 'analyses.inconclusive', level: 'limitation', item: name })
+      }
+      break
+    case 'synthesis':
+      for (const f of p.synthesis.findings) {
+        const s = findingSupport(p, f)
+        const name = label(f.insight || f.discovery)
+        if (s.cls === 'verified') continue
+        if (s.cls === 'unsupported') {
+          if (s.reasons.includes('noBasis')) out.push({ key: 'synthesis.unsupported', level: 'needs-evidence', item: name })
+          continue // no links at all is a failed criterion (synthesis.linked)
+        }
+        out.push({ key: s.documented ? `synthesis.${s.cls}Documented` : `synthesis.${s.cls}`, level: s.documented ? 'limitation' : 'needs-evidence', item: name })
+      }
+      break
+    case 'recommendations':
+      for (const r of p.recommendations) {
+        const c = recommendationChain(p, r)
+        const name = label(r.title || r.action)
+        if (c.level === 'unsupported') out.push({ key: c.reason === 'brokenChain' ? 'recommendations.brokenChain' : 'recommendations.unsupported', level: 'needs-evidence', item: name })
+        else if (c.level === 'partial') out.push({ key: 'recommendations.partial', level: 'limitation', item: name })
+        else if (c.level === 'precautionary') out.push({ key: 'recommendations.precautionary', level: 'limitation', item: name })
+      }
+      break
+  }
+  return out
+}
+
+export function evaluateStep(p: Project, step: StepKey): StepEvaluation {
+  const criteria = stepCriteria(p, step)
+  const issues = stepIssues(p, step)
+  const status: StepStatus = !criteria.every((c) => c.met)
+    ? 'incomplete'
+    : issues.some((i) => i.level === 'needs-evidence')
+      ? 'needs-evidence'
+      : issues.length > 0
+        ? 'complete-limited'
+        : 'complete'
+  return { status, criteria, issues }
+}
+
+/** Complete, with or without documented limitations. */
 export function stepComplete(p: Project, step: StepKey): boolean {
-  return stepCriteria(p, step).every((c) => c.met)
+  const s = evaluateStep(p, step).status
+  return s === 'complete' || s === 'complete-limited'
 }
 
 /** Fraction 0..1 of criteria met for a step. */
