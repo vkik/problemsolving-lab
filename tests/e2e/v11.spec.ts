@@ -442,7 +442,7 @@ test.describe('data-loss protection: backups and storage', () => {
     await page.reload()
     await expect(page.getByTestId('backup-reminder')).toBeVisible()
     for (const lang of ['en', 'ar']) {
-      if (lang === 'ar') await page.getByTestId('lang-toggle').click()
+      if (lang === 'ar') await page.getByTestId('lang-select').selectOption('ar')
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       expect(overflow, `dashboard overflow (${lang})`).toBeLessThanOrEqual(1)
     }

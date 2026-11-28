@@ -2,10 +2,11 @@ import { create } from 'zustand'
 import { useEffect } from 'react'
 import { en, type MessageKey } from './en'
 import { ar } from './ar'
-import type { Lang } from '../lib/types'
+import { so } from './so'
+import { isRtl, LANGS, type Lang } from '../lib/types'
 
 export type { MessageKey }
-const dictionaries: Record<Lang, Record<MessageKey, string>> = { en, ar }
+const dictionaries: Record<Lang, Record<MessageKey, string>> = { en, ar, so }
 
 const PREF_KEY = 'psl.prefs'
 
@@ -19,7 +20,7 @@ interface Prefs {
 function readPrefs(): { lang: Lang; guidanceOpen: boolean } {
   try {
     const raw = JSON.parse(localStorage.getItem(PREF_KEY) ?? '{}')
-    return { lang: raw.lang === 'ar' ? 'ar' : 'en', guidanceOpen: raw.guidanceOpen !== false }
+    return { lang: (LANGS as readonly string[]).includes(raw.lang) ? (raw.lang as Lang) : 'en', guidanceOpen: raw.guidanceOpen !== false }
   } catch {
     return { lang: 'en', guidanceOpen: true }
   }
@@ -57,7 +58,7 @@ export type TFn = (key: MessageKey, vars?: Record<string, string | number>) => s
 export function useT() {
   const lang = usePrefs((s) => s.lang)
   const t: TFn = (key, vars) => translate(lang, key, vars)
-  return { t, lang, dir: lang === 'ar' ? ('rtl' as const) : ('ltr' as const) }
+  return { t, lang, dir: isRtl(lang) ? ('rtl' as const) : ('ltr' as const) }
 }
 
 /** Keeps <html lang/dir> in sync so the whole document renders correctly in RTL. */
@@ -65,7 +66,7 @@ export function useDocumentDirection() {
   const lang = usePrefs((s) => s.lang)
   useEffect(() => {
     document.documentElement.lang = lang
-    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
+    document.documentElement.dir = isRtl(lang) ? 'rtl' : 'ltr'
   }, [lang])
 }
 
@@ -73,5 +74,5 @@ export function formatDate(iso: string, lang: Lang): string {
   if (!iso) return ''
   const d = iso.length === 10 ? new Date(`${iso}T00:00:00`) : new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString(lang === 'ar' ? 'ar' : 'en-GB', { year: 'numeric', month: 'short', day: 'numeric', numberingSystem: 'latn' } as Intl.DateTimeFormatOptions)
+  return d.toLocaleDateString(lang === 'en' ? 'en-GB' : lang, { year: 'numeric', month: 'short', day: 'numeric', numberingSystem: 'latn' } as Intl.DateTimeFormatOptions)
 }

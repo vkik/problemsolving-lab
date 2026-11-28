@@ -29,7 +29,7 @@ Problem → Issues → Priorities → Work plan → Analyses (evidence) → Find
 ## Features
 
 - **Dashboard.** Create, open, duplicate, archive and delete projects. Each card shows completion, current stage, outstanding and overdue items, and creation and modification dates.
-- **Step 1, Define.** The full Problem Statement Worksheet, plus a SMART assessment that you judge yourself. Automatic hints flag vague, broad, unmeasured or untimed questions, in English and Arabic. *The app never invents targets, statistics, deadlines or baselines.*
+- **Step 1, Define.** The full Problem Statement Worksheet, plus a SMART assessment that you judge yourself. Automatic hints flag vague, broad, unmeasured or untimed questions, in English, Arabic and Somali. *The app never invents targets, statistics, deadlines or baselines.*
 - **Step 2, Structure.** Issue tree builder:
   - Unlimited levels; add, edit, delete, reorder, indent/outdent, and collapse/expand branches. Keyboard: Enter adds a sibling, Tab indents, Shift+Tab outdents.
   - A visual tree, exportable as PNG or SVG, with an issue-tree vs. hypothesis-tree choice.
@@ -78,7 +78,7 @@ Problem → Issues → Priorities → Work plan → Analyses (evidence) → Find
   - *Share backup* sends the file straight to Google Drive, WhatsApp or email on phones that support it; *Download backup* works everywhere.
   - A reminder appears when a project has gone a week with changes outside any backup. *Later* hides it for three days.
   - Imported projects count as backed up, since they came from a file.
-- **Executive report.** It compiles all seven steps into thirteen sections in English or Arabic, independently of the interface language:
+- **Executive report.** It compiles all seven steps into thirteen sections in English, Arabic or Somali, independently of the interface language:
   - an evidence register grouped by class (facts, observations, external evidence, assumptions, interpretations);
   - verified conclusions kept apart from partially supported, preliminary and inconclusive findings;
   - a reasoning chain for every recommendation;
@@ -88,7 +88,7 @@ Problem → Issues → Priorities → Work plan → Analyses (evidence) → Find
 - **Coaching on every step.**
   - Purpose, method, expected output, a practical example, common mistakes, guiding questions, a quality checklist and completion criteria.
   - **Think Deeper**: you write your own answer before the coaching prompt is revealed.
-- **Bilingual.** English (default) and Arabic with full right-to-left layout. User content is never altered when you switch.
+- **Three languages.** English (default), Arabic with full right-to-left layout, and Somali (*Soomaali*). Pick one from the language menu in the header. Interface, coaching, quality checks, the About page and the report are all translated. User content is never altered when you switch. See [`docs/TRANSLATION.md`](docs/TRANSLATION.md) for the Somali glossary and how to add a language.
 - **Private and offline.** No login, no backend, no external AI and no third-party calls. Data stays in IndexedDB on your device, and the app works offline after the first visit (installable PWA).
 - **Illustrative sample.** “A newly drilled groundwater well failed to achieve its expected performance during the pumping test” walks through all seven steps without assuming the cause and without invented test values.
 
@@ -136,7 +136,7 @@ To test the live site: `E2E_BASE_URL=https://<user>.github.io/problemsolving-lab
 
 | Task | Where |
 |------|-------|
-| Interface text | `src/i18n/en.ts` and `src/i18n/ar.ts`. The Arabic file is type-checked against the English keys, so a missing translation fails the build. |
+| Interface text | `src/i18n/en.ts`, `src/i18n/ar.ts` and `src/i18n/so.ts`. The Arabic and Somali files are type-checked against the English keys, so a missing translation fails the build. Somali coaching and criteria are in `src/content/so.ts`; `src/i18n/so.test.ts` checks their coverage. |
 | Coaching content (method, examples, mistakes, checklists, Think Deeper) | `src/content/coaching.ts` |
 | Completion criteria and states | logic in `src/lib/progress.ts`, labels in `src/content/criteria.ts` (`CRITERIA`, `CHECKS`) |
 | Evidence-chain rules (finding support, recommendation chains, analysis warnings) | `src/lib/evidence.ts` |
@@ -157,8 +157,8 @@ Before opening a pull request, run `npm run lint`, `npm run typecheck`, `npm tes
 src/
   lib/         data model, storage, migration/validation, tree ops, progress, integrity, sample
   store/       project store with automatic saving
-  i18n/        English and Arabic dictionaries, RTL handling
-  content/     coaching content and completion-criteria labels (EN/AR)
+  i18n/        English, Arabic and Somali dictionaries, RTL handling
+  content/     coaching content and completion-criteria labels (EN/AR; Somali in so.ts)
   components/  layout, step shell, issue-tree SVG, UI primitives
   steps/       the seven step workspaces
   pages/       dashboard, workspace, step router, report, about

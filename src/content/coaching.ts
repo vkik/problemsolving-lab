@@ -1,14 +1,17 @@
 /**
- * Coaching content for each step, in English and Arabic.
+ * Coaching content for each step, in English and Arabic here; Somali lives in ./so.ts and is merged below.
  * Methodology follows "Your 7-Step Problem Solving Playbook" (McKinsey.org Forward Program).
  * Practical guidance also draws on: "How to master the seven-step problem-solving process"
  * (McKinsey, 2019), "Making great decisions" (McKinsey Quarterly, 2013) and the lean
  * problem-solving chapter "Discovering better ways of working".
  */
 import type { Lang, StepKey } from '../lib/types'
+import { SO_COACHING } from './so'
 
 type L = Record<Lang, string>
 type LL = Record<Lang, string[]>
+type BaseL = Record<'en' | 'ar', string>
+type BaseLL = Record<'en' | 'ar', string[]>
 
 export interface StepCoaching {
   purpose: L
@@ -21,7 +24,18 @@ export interface StepCoaching {
   thinkDeeper: { prompt: L; coaching: L }
 }
 
-export const COACHING: Record<StepKey, StepCoaching> = {
+interface BaseCoaching {
+  purpose: BaseL
+  about: BaseL
+  produce: BaseL
+  example: BaseL
+  mistakes: BaseLL
+  questions: BaseLL
+  checklist: { id: string; text: BaseL }[]
+  thinkDeeper: { prompt: BaseL; coaching: BaseL }
+}
+
+const BASE: Record<StepKey, BaseCoaching> = {
   define: {
     purpose: {
       en: 'Agree precisely what question you need to answer, why it matters, and what success would look like — before collecting any data.',
@@ -463,3 +477,28 @@ export const COACHING: Record<StepKey, StepCoaching> = {
     },
   },
 }
+
+/** Adds the Somali text to each entry. A missing checklist item falls back to English (the test suite forbids that). */
+function withSomali(step: StepKey, b: BaseCoaching): StepCoaching {
+  const so = SO_COACHING[step]
+  return {
+    purpose: { ...b.purpose, so: so.purpose },
+    about: { ...b.about, so: so.about },
+    produce: { ...b.produce, so: so.produce },
+    example: { ...b.example, so: so.example },
+    mistakes: { ...b.mistakes, so: so.mistakes },
+    questions: { ...b.questions, so: so.questions },
+    checklist: b.checklist.map((c) => ({ id: c.id, text: { ...c.text, so: so.checklist[c.id] ?? c.text.en } })),
+    thinkDeeper: {
+      prompt: { ...b.thinkDeeper.prompt, so: so.thinkDeeper.prompt },
+      coaching: { ...b.thinkDeeper.coaching, so: so.thinkDeeper.coaching },
+    },
+  }
+}
+
+export const COACHING = Object.fromEntries(
+  (Object.keys(BASE) as StepKey[]).map((k) => [k, withSomali(k, BASE[k])]),
+) as Record<StepKey, StepCoaching>
+
+/** English/Arabic source, exported for the translation-coverage test. */
+export const COACHING_BASE = BASE

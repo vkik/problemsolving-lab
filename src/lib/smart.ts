@@ -21,6 +21,13 @@ const TIME_EN = /\b(by|before|within|until|end of|this (week|month|quarter|year)
 const TIME_AR = /(بحلول|قبل|خلال|حتى|نهاية|الأسبوع|الشهر|الربع|السنة|العام|أسابيع|أشهر|شهور|أيام|يناير|فبراير|مارس|أبريل|مايو|يونيو|يوليو|أغسطس|سبتمبر|أكتوبر|نوفمبر|ديسمبر|20\d\d)/
 const ACTION_EN = /^\s*(how|what|which|should|can|why|where|who|when)\b|\b(reduce|increase|restore|achieve|decide|determine|identify|select|deliver|recover|raise|lower|cut|reach)\b/i
 const ACTION_AR = /^\s*(كيف|ما|ماذا|أي|هل|لماذا|أين|من|متى)|(خفض|زيادة|استعادة|تحقيق|تحديد|اختيار|تقليل|رفع|الوصول)/
+// Somali (Soomaali) equivalents. Keyword lists only prompt reflection; they never decide.
+const VAGUE_SO = /\b(hagaaji|hagaajin|hagaajinta|horumari|horumarin|wanaaji|wanaajin|ka wanaagsan|arrimo|arrimaha|dhibaatooyin|waxyaabo|si uun|iwm)\b/i
+const BROAD_SO = /\b(dhammaan|guud ahaan|oo dhan|gebi ahaanba|kasta)\b/i
+const UNITS_SO = /\b(boqolkiiba|litir|litirka|mitir|mitirka|km|maalmo|maalin|saacad|saacadood|doollar|qoys|qoysas|qof|dad|heerka|kharash|kharashka|miisaaniyad|miisaaniyadda|biyo-bixin|biyo-bixinta)\b/i
+const TIME_SO = /\b(ka hor|gudahood|gudaha|ilaa|dhammaadka|toddobaad|toddobaadka|bil|bilood|bisha|rubuc|sannad|sannadka|sanad|sanadka|maalmood|janaayo|febraayo|maarso|abriil|maajo|juun|luulyo|agoosto|sebtembar|oktoobar|nofembar|desembar|20\d\d)\b/i
+const ACTION_SO = /^\s*(sidee|maxay|maxaa|maxaan|kee|keebaa|kuwee|ma|yaa|xaggee|goorma|sababta)\b|\b(yaree|yareyn|kordhi|kordhin|soo celi|soo celin|gaar|gaarid|go'aami|aqoonso|dooro|hirgeli|dhimi|xalli|xallin)\b/i
+const SYMPTOM_SO = /\b(fashilmay|fashil|ma shaqaynayo|jaban|cabasho|cabashooyin|dib-u-dhac)\b/i
 const SYMPTOM_EN = /\b(failed|failure|is low|is high|not working|broken|complaints?|delays?)\b/i
 
 export function wordCount(text: string): number {
@@ -34,13 +41,13 @@ export function reviewQuestion(text: string): SmartHint[] {
   const words = wordCount(q)
 
   if (words < 8) hints.push({ criterion: 'specific', code: 'tooShort' })
-  if (VAGUE_EN.test(q) || VAGUE_AR.test(q)) hints.push({ criterion: 'specific', code: 'vagueWords' })
-  if (!NUMBER.test(q) && !UNITS_EN.test(q) && !UNITS_AR.test(q)) hints.push({ criterion: 'measurable', code: 'noMeasure' })
-  if (!ACTION_EN.test(q) && !ACTION_AR.test(q)) hints.push({ criterion: 'actionOriented', code: 'noAction' })
-  if (!TIME_EN.test(q) && !TIME_AR.test(q)) hints.push({ criterion: 'timeBound', code: 'noTime' })
-  if (BROAD_EN.test(q) || BROAD_AR.test(q)) hints.push({ criterion: 'scope', code: 'broadWords' })
-  const ands = (q.match(/\band\b|\bو\S/g) ?? []).length
+  if (VAGUE_EN.test(q) || VAGUE_AR.test(q) || VAGUE_SO.test(q)) hints.push({ criterion: 'specific', code: 'vagueWords' })
+  if (!NUMBER.test(q) && !UNITS_EN.test(q) && !UNITS_AR.test(q) && !UNITS_SO.test(q)) hints.push({ criterion: 'measurable', code: 'noMeasure' })
+  if (!ACTION_EN.test(q) && !ACTION_AR.test(q) && !ACTION_SO.test(q)) hints.push({ criterion: 'actionOriented', code: 'noAction' })
+  if (!TIME_EN.test(q) && !TIME_AR.test(q) && !TIME_SO.test(q)) hints.push({ criterion: 'timeBound', code: 'noTime' })
+  if (BROAD_EN.test(q) || BROAD_AR.test(q) || BROAD_SO.test(q)) hints.push({ criterion: 'scope', code: 'broadWords' })
+  const ands = (q.match(/\band\b|\biyo\b|\bو\S/g) ?? []).length
   if (ands >= 3 || words > 45) hints.push({ criterion: 'scope', code: 'multiple' })
-  if (SYMPTOM_EN.test(q) && !/\?\s*$/.test(q) && !ACTION_EN.test(q)) hints.push({ criterion: 'specific', code: 'symptom' })
+  if ((SYMPTOM_EN.test(q) || SYMPTOM_SO.test(q)) && !/\?\s*$/.test(q) && !ACTION_EN.test(q) && !ACTION_SO.test(q)) hints.push({ criterion: 'specific', code: 'symptom' })
   return hints
 }

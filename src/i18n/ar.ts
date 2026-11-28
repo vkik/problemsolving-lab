@@ -14,7 +14,7 @@ export const ar: Record<MessageKey, string> = {
   'nav.workspace': 'مساحة العمل',
   'nav.report': 'التقرير النهائي',
   'nav.about': 'حول التطبيق',
-  'nav.switchLang': 'English',
+  'nav.switchLang': 'اللغة',
   'nav.skip': 'انتقل إلى المحتوى',
   'nav.steps': 'الخطوات السبع',
 

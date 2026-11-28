@@ -282,7 +282,7 @@ test('12–13. switch Arabic/English; RTL layout; user content unchanged', async
   await createProject(page, 'مشروع تجريبي')
   await page.getByTestId('define-question').fill('كيف يمكننا خفض الفاقد في الشبكة بحلول 2027؟')
   await waitSaved(page)
-  await page.getByTestId('lang-toggle').click()
+  await page.getByTestId('lang-select').selectOption('ar')
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
   await expect(page.locator('html')).toHaveAttribute('lang', 'ar')
   await expect(page.getByTestId('step-title')).toHaveText('تعريف المشكلة')
@@ -303,7 +303,7 @@ test('12–13. switch Arabic/English; RTL layout; user content unchanged', async
   await expect(page.getByTestId('report')).toHaveAttribute('dir', 'ltr')
   await expect(page.getByTestId('report')).toContainText('Executive summary')
   // back to English: preference persists across reloads
-  await page.getByTestId('lang-toggle').click()
+  await page.getByTestId('lang-select').selectOption('en')
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr')
   await expect(page.getByTestId('report-title')).toHaveText('مشروع تجريبي')

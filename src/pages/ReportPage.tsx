@@ -12,7 +12,7 @@ import { flatten, labelMap } from '../lib/tree'
 import { rankedIssues, score } from '../lib/priority'
 import { rankedFindings } from '../lib/integrity'
 import { exportProjects } from '../lib/files'
-import { EVIDENCE_TYPES, HORIZONS, MECE_KEYS, QUALITY_KEYS, SMART_KEYS, STEP_KEYS, type Evidence, type Lang, type Level, type Project } from '../lib/types'
+import { EVIDENCE_TYPES, HORIZONS, isRtl, LANG_NAMES, LANGS, MECE_KEYS, QUALITY_KEYS, SMART_KEYS, STEP_KEYS, type Evidence, type Lang, type Level, type Project } from '../lib/types'
 import { IssueTreeSvg } from '../components/IssueTreeSvg'
 import { PriorityMatrix } from '../steps/Prioritize'
 import { analysisWarnings, EVIDENCE_STYLE, RESULT_STYLE } from '../steps/Analyses'
@@ -147,7 +147,7 @@ function Report({ p, lang }: { p: Project; lang: Lang }) {
   }
 
   return (
-    <article lang={lang} dir={lang === 'ar' ? 'rtl' : 'ltr'} className="report-root card mx-auto max-w-[900px] bg-white px-6 py-8 sm:px-12 sm:py-12" data-testid="report">
+    <article lang={lang} dir={isRtl(lang) ? 'rtl' : 'ltr'} className="report-root card mx-auto max-w-[900px] bg-white px-6 py-8 sm:px-12 sm:py-12" data-testid="report">
       {/* Cover */}
       <header className="border-b-4 border-gold-500 pb-6">
         <div className="mb-6 flex items-center gap-3">
@@ -296,7 +296,7 @@ function Report({ p, lang }: { p: Project; lang: Lang }) {
         ) : (
           <>
             <div className="avoid-break mb-4 overflow-x-auto rounded-lg border border-navy-100">
-              <IssueTreeSvg rootText={rootQuestion(p)} nodes={p.structure.nodes} rtl={lang === 'ar'} respectCollapse={false} />
+              <IssueTreeSvg rootText={rootQuestion(p)} nodes={p.structure.nodes} rtl={isRtl(lang)} respectCollapse={false} />
             </div>
             <ul className="mb-4 space-y-0.5 text-sm">
               {flatten(p.structure.nodes).map((f) => (
@@ -681,8 +681,11 @@ export function ReportPage() {
             {t('report.language')}
           </label>
           <select id="report-lang" className="input w-32 py-1.5" value={reportLang} onChange={(e) => setReportLang(e.target.value as Lang)} data-testid="report-lang">
-            <option value="en">English</option>
-            <option value="ar">العربية</option>
+            {LANGS.map((l) => (
+              <option key={l} value={l} lang={l}>
+                {LANG_NAMES[l]}
+              </option>
+            ))}
           </select>
           <button className="btn-secondary" onClick={() => exportProjects([project], project.title)}>
             <Download className="h-4 w-4" />

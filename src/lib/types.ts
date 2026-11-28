@@ -15,7 +15,11 @@
 
 export const SCHEMA_VERSION = 2
 
-export type Lang = 'en' | 'ar'
+export type Lang = 'en' | 'ar' | 'so'
+export const LANGS: readonly Lang[] = ['en', 'ar', 'so']
+/** Each language's own name, shown in language pickers. */
+export const LANG_NAMES: Record<Lang, string> = { en: 'English', ar: 'العربية', so: 'Soomaali' }
+export const isRtl = (lang: Lang): boolean => lang === 'ar'
 
 export type StepKey = 'define' | 'structure' | 'prioritize' | 'workplan' | 'analyses' | 'synthesis' | 'recommendations'
 
