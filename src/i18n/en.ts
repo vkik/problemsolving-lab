@@ -12,7 +12,7 @@ export const en = {
   'nav.workspace': 'Workspace',
   'nav.report': 'Final report',
   'nav.about': 'About',
-  'nav.switchLang': 'العربية',
+  'nav.switchLang': 'Language',
   'nav.skip': 'Skip to content',
   'nav.steps': 'Seven steps',
 

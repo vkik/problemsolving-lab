@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useParams } from 'react-router-dom'
+import { LANG_NAMES, LANGS, type Lang } from '../lib/types'
 import { CheckCircle2, CloudOff, Download, FileText, Languages, LayoutDashboard, Loader2, AlertCircle, FolderKanban, RefreshCw } from 'lucide-react'
 import { exportProjects } from '../lib/files'
 import { registerSW } from 'virtual:pwa-register'
@@ -200,15 +201,22 @@ export function Layout({ loaded }: { loaded: boolean }) {
               </span>
             )}
             <SaveIndicator />
-            <button
-              className="inline-flex items-center gap-1.5 rounded-md border border-white/15 px-2.5 py-1.5 text-sm hover:bg-white/10"
-              onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-              data-testid="lang-toggle"
-              lang={lang === 'en' ? 'ar' : 'en'}
-            >
-              <Languages className="h-4 w-4" />
-              {t('nav.switchLang')}
-            </button>
+            <label className="relative inline-flex items-center rounded-md border border-white/15 text-sm hover:bg-white/10 focus-within:ring-2 focus-within:ring-teal-400">
+              <Languages className="pointer-events-none absolute start-2.5 h-4 w-4" aria-hidden="true" />
+              <span className="sr-only">{t('nav.switchLang')}</span>
+              <select
+                className="cursor-pointer appearance-none bg-transparent py-1.5 pe-2.5 ps-8 text-white outline-none [&>option]:text-navy-900"
+                value={lang}
+                onChange={(e) => setLang(e.target.value as Lang)}
+                data-testid="lang-select"
+              >
+                {LANGS.map((l) => (
+                  <option key={l} value={l} lang={l}>
+                    {LANG_NAMES[l]}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </div>
         {!online && <div className="bg-gold-500/90 px-4 py-1 text-center text-xs text-navy-950">{t('app.offline')}</div>}

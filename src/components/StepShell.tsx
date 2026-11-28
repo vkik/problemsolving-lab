@@ -205,15 +205,15 @@ export function StepShell({ project, step, children, output }: { project: Projec
         <div className="min-w-0">
           <header className="card mb-6 overflow-hidden">
             <div className="flex flex-col gap-4 bg-navy-900 p-5 text-white sm:flex-row sm:items-start sm:justify-between sm:p-6">
-              <div className="min-w-0">
+              <div className="min-w-0 sm:min-w-[14rem] sm:flex-1">
                 <p className="text-sm font-semibold text-gold-400">{t('step.n', { n: idx + 1 })}</p>
                 <h1 className="mt-0.5 text-2xl font-semibold text-white" data-testid="step-title">
                   {t(`step.${step}`)}
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm text-navy-100">{COACHING[step].purpose[lang]}</p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className={`badge ${STATUS_BADGE[status]}`} data-testid="step-status" data-status={status} title={t(`eval.d.${status}`)}>
+              <div className="flex flex-wrap items-center gap-2 sm:max-w-[45%] sm:justify-end">
+                <span className={`badge whitespace-normal text-start ${STATUS_BADGE[status]}`} data-testid="step-status" data-status={status} title={t(`eval.d.${status}`)}>
                   {status === 'incomplete' ? t('shell.stepIncomplete', { n: criteria.filter((c) => c.met).length, total: criteria.length }) : t(`eval.${status}`)}
                 </span>
                 <button className="btn border border-white/20 py-1.5 text-white hover:bg-white/10" onClick={() => setOpen(!open)} aria-expanded={open} data-testid="toggle-guidance">

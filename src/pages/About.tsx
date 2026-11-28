@@ -42,6 +42,26 @@ const TEXT = {
       'ماكنزي — «ست عقليات لحل المشكلات في أوقات شديدة الغموض»؛ ورقة منهج ماكنزي لحل المشكلات؛ Umbrex؛ Strategy Toolkit — أشجار القضايا وMECE.',
     ],
   },
+  so: {
+    title: 'Ku saabsan ProblemSolving Lab',
+    intro:
+      "ProblemSolving Lab waa goob shaqo oo wax-ku-ool ah oo lagu dabaqo habka xallinta dhibaatooyinka ee toddobada tallaabo ah ee lagu baro barnaamijka McKinsey.org Forward, iyadoo lagu dabaqayo dhibaatooyin dhab ah oo hay'adeed, injineeriyadeed, kaabayaal, biyo, deegaan iyo maamul. Tallaabo kasta wuu kugu hagaa halkii uu jawaabaha oo keliya ururin lahaa.",
+    method: 'Toddobada tallaabo',
+    privacy: 'Xogtaada',
+    privacyBody:
+      "Wax kasta oo aad geliso si toos ah ayaa loogu kaydiyaa browser-kan (IndexedDB) ee qalabkan. Ma jiro akoon, server ama la-socod. Guddiga ku isticmaal “Kaydi dhammaan mashaariicda” si aad u dhoofiso fayl JSON ah, iyo “Soo geli kayd” si aad u soo celiso — tusaale ahaan qalab kale. Tirtiridda xogta browser-ka waxay tirtiraysaa mashaariicdaada, sidaas darteed kaydad hay.",
+    offline: 'Shaqaynta internet la\'aanta',
+    offlineBody:
+      "Booqashada koowaad kadib barnaamijku wuxuu shaqeeyaa internet la'aan. Waad rakibi kartaa sidoo kale: Chrome ama Edge ku isticmaal “Install app” ee ku yaal bar-ka cinwaanka; iPad ama iPhone ku isticmaal Share → “Add to Home Screen”.",
+    sources: 'Ilaha',
+    sourcesList: [
+      'Barnaamijka McKinsey.org Forward — “Your 7-Step Problem Solving Playbook” (habka aasaasiga ah).',
+      'McKinsey & Company — “How to master the seven-step problem-solving process” (qoraalka podcast, 2019).',
+      'McKinsey Quarterly — “Making great decisions” (2013).',
+      'McKinsey — “Discovering better ways of working” (xallinta dhibaatooyinka habka lean).',
+      'McKinsey — “Six problem-solving mindsets for very uncertain times”; The McKinsey Approach to Problem Solving (warqad shaqaale); Umbrex; Strategy Toolkit — geedaha arrimaha iyo MECE.',
+    ],
+  },
 }
 
 export function About() {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — Somali language
+
+- **Somali (Soomaali)** is now a third language for the interface, coaching, completion criteria, quality checks, the About page and the report. The report language is still chosen independently.
+- The header language button became a menu with three choices (English, العربية, Soomaali).
+- SMART hints recognise Somali question, time, unit, vague and broad words, so well-formed Somali questions do not get false hints.
+- The step header lets long status labels wrap instead of squeezing the title.
+- New: `docs/TRANSLATION.md` (glossary and how to add a language). Tests: `src/i18n/so.test.ts` checks that every string is translated and keeps its placeholders; `tests/e2e/somali.spec.ts` checks the Somali interface, report and phone layout.
+- The Somali text is a first draft and should be reviewed by a native speaker.
+
 ## 1.1.0 — Quality, reliability and methodology enhancement
 
 Full notes: [`docs/V1.1_CHANGELOG.md`](docs/V1.1_CHANGELOG.md).

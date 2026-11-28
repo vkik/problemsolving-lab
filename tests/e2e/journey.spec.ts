@@ -203,14 +203,14 @@ test('full 17-step workflow in one project', async ({ page, context }) => {
   await expect(page.getByTestId('rec-title')).toHaveValue('Introduce a weekly fuel check')
 
   // 16. Arabic and English
-  await page.getByTestId('lang-toggle').click()
+  await page.getByTestId('lang-select').selectOption('ar')
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
   await expect(page.getByTestId('step-title')).toHaveText('إعداد التوصيات')
   await expect(page.getByTestId('rec-title')).toHaveValue('Introduce a weekly fuel check')
   await page.goto(url2 + '/report')
   await expect(page.getByTestId('report')).toHaveAttribute('dir', 'rtl')
   await expect(page.getByTestId('report').locator('#s1')).toContainText('الملخص التنفيذي')
-  await page.getByTestId('lang-toggle').click()
+  await page.getByTestId('lang-select').selectOption('en')
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr')
 
   // 17. Offline

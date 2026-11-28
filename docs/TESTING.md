@@ -1,15 +1,15 @@
 # Testing report
 
-**Version:** 1.1.0 · **Date:** 26 November 2026 · **Branch:** `feature/v1.1-quality-enhancements`
+**Version:** 1.2.0 · **Date:** 28 November 2026 · **Branch:** `feature/v1.1-quality-enhancements`
 **Browser:** Chromium via Playwright (Google Chrome locally), against the production build served under `/problemsolving-lab/`.
 
 | Check | Command | Result |
 |-------|---------|--------|
 | Type-check | `npm run typecheck` | ✅ no errors |
 | Lint | `npm run lint` (oxlint, used instead of ESLint) | ✅ 0 errors · 23 warnings (React fast-refresh export style, `Date` read during render; none affects behaviour) |
-| Unit tests (Vitest) | `npm test` | ✅ 89 / 89 in 6 files |
+| Unit tests (Vitest) | `npm test` | ✅ 96 / 96 in 7 files |
 | Production build | `npm run build` | ✅ 19 precached entries (≈ 956 KiB) |
-| Acceptance tests (Playwright) | `npm run test:e2e` | ✅ 36 / 36 in 3 files |
+| Acceptance tests (Playwright) | `npm run test:e2e` | ✅ 39 / 39 in 4 files |
 
 Every end-to-end test also fails if the browser logs a console error or an uncaught exception. CI runs the same checks on every pull request and on `main` (see README → Deployment).
 
@@ -18,6 +18,7 @@ Every end-to-end test also fails if the browser logs a console error or an uncau
 | File | Covers |
 |------|--------|
 | `src/lib/saveQueue.test.ts` (21) | Failed snapshots retained and persisted on retry; back-off schedule, then *Retry required*; manual retry; one write at a time with coalescing; an older snapshot never overwrites a newer one; delete waits for the in-flight write; no debounce timer. **Flush semantics:** concurrent flushes both wait for every write; a flush during an active write does not resolve before it commits; an edit that arrives during a flush and then fails is reported; rapid edits write only the latest snapshot. **Recovery journal:** copies taken on failure, none on healthy saves, journal failure reported, `hold()` marks a restored snapshot unsaved. **Lifecycle:** flush on hidden, best-effort flush on `pagehide`, confirmation on `beforeunload` only when unsaved, a recovery copy before flushing, unregister |
+| `src/i18n/so.test.ts` (7) | Somali coverage: every key translated with its placeholders; no English copies left; coaching, criteria and checks complete. SMART hints: no false hints on a well-formed Somali question; vague, broad, timeless and symptom wording still flagged |
 | `src/lib/backup.test.ts` (6) | Backup reminder: no nagging on a new project; reminder after a week without a backup; a backup covers a project until it changes; a recent backup never reminds; *Later* snoozes for three days; only exported projects are recorded |
 | `src/lib/journal.test.ts` (3) | Store / list / remove; failure reported when storage is full or missing; unreadable entries cleaned up |
 | `src/store/projects.test.ts` (8) | Store-level persistence with a faulty storage double: D1 regression; reload returns stored data; reload after a failed write restores the journal copy (D7); same-timestamp copy restored only if different; stale copy ignored and removed; never-stored project restored; delete removes the copy; indicator states saving → saved and failure → retrying with unsaved count |
@@ -49,6 +50,16 @@ One test drives a new project through every step of brief §9 without using the 
 17. Work offline.
 
 **Failure recovery** is covered by the Phase 1 tests below: storage is forced to fail, the page reloads, and the change is recovered.
+
+### Somali — `tests/e2e/somali.spec.ts`
+
+| Test | Result |
+|------|--------|
+| The language menu switches to Somali (`lang="so"`, left-to-right); the choice survives a reload | ✅ |
+| Step titles, coaching, worksheet, MECE review, step status and the 13-section report are in Somali; the report language can still be switched to Arabic (RTL) or English | ✅ |
+| Phone (390 px): dashboard, all seven steps, the report and the About page fit without sideways scrolling | ✅ |
+
+The language tests in `app.spec.ts` and `journey.spec.ts` now use the language menu instead of the old two-way button; their assertions are unchanged.
 
 ### Original criteria (brief v1.0, §9) — `tests/e2e/app.spec.ts`
 

@@ -1,7 +1,12 @@
 import type { Lang } from '../lib/types'
+import { SO_CHECKS, SO_CRITERIA } from './so'
+
+type Base = Record<string, Record<'en' | 'ar', string>>
+const withSo = (base: Base, so: Record<string, string>): Record<string, Record<Lang, string>> =>
+  Object.fromEntries(Object.entries(base).map(([k, v]) => [k, { ...v, so: so[k] ?? v.en }]))
 
 /** Human-readable labels for the completion criteria computed in lib/progress.ts */
-export const CRITERIA: Record<string, Record<Lang, string>> = {
+export const CRITERIA_BASE: Base = {
   'define.question': { en: 'A problem question is written', ar: 'سؤال المشكلة مكتوب' },
   'define.worksheet': { en: 'At least 6 of the 8 core worksheet fields are completed', ar: 'اكتمال 6 على الأقل من الحقول الأساسية الثمانية في ورقة العمل' },
   'define.smartAssessed': { en: 'All five SMART criteria are assessed', ar: 'تقييم معايير SMART الخمسة جميعها' },
@@ -40,7 +45,7 @@ export const CRITERIA: Record<string, Record<Lang, string>> = {
  * "limitation" checks make a step "Complete with documented limitations";
  * "needs-evidence" checks make it "Needs further evidence".
  */
-export const CHECKS: Record<string, Record<Lang, string>> = {
+export const CHECKS_BASE: Base = {
   'define.smartPartly': { en: 'SMART “{item}” is only partly met (explained in your note)', ar: 'معيار SMART «{item}» متحقق جزئيًا (موضّح في ملاحظتك)' },
   'structure.reviewIncomplete': {
     en: 'Review accepted before the two new questions (causes vs symptoms, tree type) were added — answer them at your next review',
@@ -64,3 +69,6 @@ export const CHECKS: Record<string, Record<Lang, string>> = {
   'recommendations.partial': { en: 'Partially supported — linked findings are not all verified: {item}', ar: 'مدعومة جزئيًا — ليست كل النتائج المرتبطة مُتحقق منها: {item}' },
   'recommendations.precautionary': { en: 'Precautionary action (justified, not evidence-backed): {item}', ar: 'إجراء احترازي (مبرر، وغير مدعوم بالأدلة): {item}' },
 }
+
+export const CRITERIA = withSo(CRITERIA_BASE, SO_CRITERIA)
+export const CHECKS = withSo(CHECKS_BASE, SO_CHECKS)
